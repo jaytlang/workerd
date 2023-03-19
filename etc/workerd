@@ -1,0 +1,9 @@
+#!/bin/ksh
+# bare-bones tape for rc.d
+
+daemon="/usr/sbin/workerd"
+rc_reload=NO
+
+. /etc/rc.d/rc.subr
+
+rc_cmd $1

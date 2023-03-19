@@ -1,0 +1,8 @@
+etc/jaytlang.key
+regress/__pycache__
+*.o
+*.d
+*.core
+*.so
+src/workerd
+images/*
