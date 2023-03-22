@@ -12,7 +12,7 @@ active = []
 
 for _i in range(5):
 	nc = Connection()
-	nc.connect("eecs-digital-51.mit.edu", 443)	
+	nc.connect("eecs-digital-51.mit.edu", 8123)	
 
 	label = b"hello"
 	file = b"world" * 50000

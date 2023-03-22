@@ -145,7 +145,8 @@ int              netmsg_isvalid(struct netmsg *, int *);
 #define CONN_MODE_TLS	1
 #define CONN_MODE_MAX	2
 
-#define CONN_PORT       8123
+#define FRONTEND_CONN_PORT	443
+#define VM_CONN_PORT		8123
 
 #define CONN_CA_PATH    "/etc/ssl/authority"
 #define CONN_CERT       "/etc/ssl/serverchain.pem"
@@ -200,19 +201,22 @@ int              msgqueue_setcachedoffset(struct msgqueue *, size_t);
 struct vm;
 
 struct vm_interface {
-	void	 (*print)(uint32_t, char *);
-	char	*(*readline)(uint32_t);
-	char	*(*loadfile)(uint32_t, char *, size_t *);
-	void	 (*commitfile)(uint32_t, char *, char *, size_t);
+	void	(*print)(uint32_t, char *);
+	void	(*readline)(uint32_t);
+	void	(*loadfile)(uint32_t, char *);
+	void	(*commitfile)(uint32_t, char *, char *, size_t);
 
-	void	 (*signaldone)(uint32_t);
+	void	(*signaldone)(uint32_t);
 };
+
+void		 vm_init(void);
+void		 vm_killall(void);
 
 struct vm	*vm_claim(uint32_t, struct vm_interface);
 struct vm	*vm_fromkey(uint32_t);
 void		 vm_release(struct vm *);
-void		 vm_releaseall(void);
 
-/* send a file to the vm, send a line to the vm, other stuff */
+void		 vm_injectfile(struct vm *, char *, char *, size_t);
+void		 vm_injectline(struct vm *, char *);
 
 #endif /* WORKERD_H */

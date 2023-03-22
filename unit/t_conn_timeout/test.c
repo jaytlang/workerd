@@ -87,7 +87,7 @@ main()
 	struct timeval	tv;
 
 	event_init();
-	conn_listen(conn_accept, 443, CONN_MODE_TCP);	
+	conn_listen(conn_accept, VM_CONN_PORT, CONN_MODE_TCP);	
 
 	fork_client();
 

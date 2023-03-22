@@ -299,7 +299,7 @@ conn_doreceive(int fd, short event, void *arg)
 			thispacketsize = tls_read(c->tls_context, receivebuf + receivesize, CONN_MTU);
 		else {
 			thispacketsize = read(c->sockfd, receivebuf + receivesize, CONN_MTU);
-			if (thispacketsize < 0 || errno == EAGAIN)
+			if (thispacketsize < 0 && errno == EAGAIN)
 				thispacketsize = TLS_WANT_POLLIN;
 		}
 		
@@ -308,7 +308,6 @@ conn_doreceive(int fd, short event, void *arg)
 			willteardown = 1;
 			break;	
 		} else if (thispacketsize == TLS_WANT_POLLIN || thispacketsize == TLS_WANT_POLLOUT) {
-			log_writex(LOGTYPE_DEBUG, "waiting for poll");
 			break;
 		}
 
@@ -400,8 +399,11 @@ conn_dosend(struct msgqueue *mq, struct conn *c)
 
 	if (globalcontext.mode == CONN_MODE_TLS)
 		written = tls_write(c->tls_context, rawmsg, sendsize);
-	else 
+	else {
 		written = write(c->sockfd, rawmsg, sendsize);
+		if (written < 0 && errno == EAGAIN)
+			written = TLS_WANT_POLLOUT;
+	}
 
 	if (written == -1 || written == 0)
 		conn_teardown(c);

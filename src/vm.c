@@ -23,11 +23,12 @@
 #define VM_BOOTSTATE	0
 #define VM_READYSTATE	1
 #define VM_WORKSTATE	2
-#define VM_MAXSTATE	3
+#define VM_ZOMBIESTATE	3
+#define VM_MAXSTATE	4
 
 #define VM_NOKEY	-1
 
-#define VMCTL(__VA_ARGS__) do {					\
+#define VMCTL(ASSERT, __VA_ARGS__) do {				\
 	int	wstatus;					\
 	pid_t	pid;						\
 								\		
@@ -51,7 +52,7 @@
 		log_fatalx("VMCTL: terminated by signal %d",	\
 			WTERMSIG(wstatus));			\
 								\
-	else if (WEXITSTATUS(wstatus) != 0)			\
+	else if ((ASSERT) && WEXITSTATUS(wstatus) != 0)		\
 		log_fatalx("VMCTL: exited with status %d",	\
 			WEXITSTATUS(wstatus));			\
 } while (0)
@@ -81,21 +82,24 @@ static struct vmqueue	 bootqueue = SIMPLEQ_HEAD_INITIALIZER(bootqueue);
 static void		 bootqueue_enqmachine(struct vm *);
 static void	 	 bootqueue_bootfirst(void);
 static struct vm	*bootqueue_popfirst(void);
+static void		 bootqueue_clear(void);
 
 static struct vm	 allvms[VM_MAXCOUNT] = { 0 };
 
 static int		 allvms_getvmindex(struct vm *);
 
 static void	 	 vm_reset(struct vm *);
-static struct vm	*vm_bykey(uint32_t);
 static struct vm	*vm_byconn(struct conn *);
 
 static void		 vm_senderror(struct vm *, const char *, ...);
+static void		 vm_reap(struct vm *);
 
 static void		 vm_handleteardown(struct conn *);
 static void		 vm_accept(struct conn *);
 static void		 vm_timeout(struct conn *);
 static void		 vm_getmsg(struct conn *, struct netmsg *);
+
+static void		 signaldone_annuled(uint32_t);
 
 static int
 allvms_getvmindex(struct vm *v)
@@ -118,14 +122,14 @@ bootqueue_bootfirst(void)
 
 	v = SIMPLEQ_FIRST(&bootqueue);
 
-	VMCTL("start", "-t", VM_TEMPLATENAME,
+	VMCTL(1, "start", "-t", VM_TEMPLATENAME,
 		"-d", v->basedisk,
 		"-d", v->vivadodisk,
 		v->name);
 }
 
 static struct vm *
-bootqueue_popfirst(struct vm *v)
+bootqueue_popfirst(void)
 {
 	struct vm	*v;
 
@@ -135,6 +139,17 @@ bootqueue_popfirst(struct vm *v)
 	if (!SIMPLEQ_EMPTY(&bootqueue)) bootqueue_bootfirst();
 
 	return v;
+}
+
+static void
+bootqueue_clear(void)
+{
+	struct vm	*v;
+
+	while (!SIMPLEQ_EMPTY(&bootqueue)) {
+		v = SIMPLEQ_FIRST(&bootqueue);
+		SIMPLEQ_REMOVE_HEAD(&bootqueue, entries);
+	}
 }
 
 static void
@@ -162,6 +177,41 @@ vm_senderror(struct vm *v, const char *fmt, ...)
 	va_end(ap);
 }
 
+/* move to the zombie state, clean up connection,
+ * and shut down the underlying VM
+ * be careful! this code is used by lots of different callers
+ * since the song and dance to reset VMs optimistically is complex
+ */
+static void
+vm_reap(struct vm *v)
+{
+	if (v->state == VM_ZOMBIESTATE)
+		log_fatalx("vm_reap: tried to reap vm twice");
+
+	if (v->state == VM_BOOTSTATE)
+		bootqueue_popfirst();
+
+	if (v->conn != NULL) {
+		conn_setteardowncb(v->conn, NULL);		
+		conn_teardown(v->conn);
+		v->conn = NULL;
+	}
+
+	VMCTL(v->state == VM_BOOTSTATE, "stop", "-fw", dead->name);
+
+	/* if we're in the work state, we have to wait
+	 * to be released by our caller. otherwise, we can
+	 * recycle ourself
+	 */
+	if (v->state != VM_WORKSTATE) {
+		v->state = VM_ZOMBIESTATE;
+		vm_reset(v);
+	} else {
+		v->state = VM_ZOMBIESTATE;
+		v->callbacks.signaldone();
+	}
+}
+
 
 static void
 vm_reset(struct vm *v)
@@ -174,14 +224,10 @@ vm_reset(struct vm *v)
 		v->initialized = 1;
 		v->conn = NULL;
 
-	} else {
-		if (v->state != VM_BOOTSTATE) {
-			VMCTL("stop", "-fw", v->name);
+	} else if (v->state != VM_ZOMBIESTATE) {
+		log_fatalx("vm_reset: bug: tried to reset vm in non-zombie state");
 
-			conn_teardown(v->conn);
-			v->conn = NULL;
-		}
-			
+	} else {
 		if (unlink(v->basedisk) < 0)
 			log_fatal("vm_reset: unlink vm base image");
 		else if (unlink(v->vivadodisk) < 0)
@@ -215,18 +261,6 @@ vm_reset(struct vm *v)
 }
 
 static struct vm *
-vm_bykey(uint32_t key)
-{
-	int i;
-
-	for (i = 0; i < VM_MAXCOUNT; i++)
-		if (allvms[i].key == key) return &allvms[i];
-
-	errno = EINVAL;
-	return NULL;
-}
-
-static struct vm *
 vm_byconn(struct conn *c)
 {
 	int i;
@@ -242,12 +276,10 @@ vm_handleteardown(struct conn *c)
 {
 	struct vm	*dead;
 	
-
 	dead = vm_byconn(c);
-	if (dead->state == VM_WORKSTATE)
-		dead->callbacks.signaldone(dead->key);
 
-	vm_reset(dead);
+	dead->conn = NULL;
+	vm_reap(dead);
 }
 
 static void
@@ -278,7 +310,7 @@ vm_timeout(struct conn *c)
 
 	if (v->shouldheartbeat) {
 		log_writex(LOGTYPE_DEBUG, "vm heartbeat timeout");
-		conn_teardown(c);
+		vm_reap(v);
 	} else {
 		v->shouldheartbeat = 1;	
 		
@@ -296,6 +328,8 @@ static void
 vm_getmsg(struct conn *c, struct netmsg *m)
 {
 	struct vm	*v;
+	char		*label, *data;
+	size_t		 datasize;
 		
 	v = vm_byconn(c);
 	v->shouldheartbeat = 0;
@@ -306,9 +340,184 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 		return;
 	}
 
-	switch (netmsg_gettype(m)) {
-
-	case NETOP_SENDLINE:
-
+	if (v->state != VM_WORKSTATE && netmsg_gettype(m) != NETOP_HEARTBEAT) {
+		vm_senderror(v, "ignored unsolicited message");
+		return;
 	}
+
+	switch (netmsg_gettype(m)) {
+	case NETOP_SENDLINE:
+		label = netmsg_getlabel(m);	
+		v->callbacks.print(v->key, label);			
+
+		free(label);
+		break;
+
+	case NETOP_REQUESTLINE:
+		v->callbacks.readline(v->key);
+		conn_stopreceiving(v->conn);
+		break;
+
+	case NETOP_SENDFILE:
+		label = netmsg_getlabel(m);
+		content = netmsg_getdata(m, (uint64_t *)(&datasize));
+
+		v->callbacks.commitfile(v->key, label, content, datasize);
+
+		free(content);
+		free(label);
+		break;
+
+	case NETOP_REQUESTFILE:
+		label = netmsg_getlabel(m);
+		v->callbacks.loadfile(v->key, label);
+		conn_stopreceiving(v->conn);
+
+		free(label);
+		break;
+
+	case NETOP_TERMINATE:
+		/* will call signaldone as needed, move us
+		 * to zombie state for eventual release
+		 * XXX: could probably defer this / keep the
+		 * VM alive until the client calls release, but no need...
+		 */
+		vm_reap(v);
+		break;
+
+	case NETOP_HEARTBEAT:
+		break;
+
+	/* don't expect to receive acks from the VM */
+	default:
+		log_writex(LOGTYPE_WARN,
+			  "vm_getmsg: vm %s sent unexpected message type %u",
+			  v->name,			
+			  netmsg_gettype(m));
+
+		vm_senderror(v, "received unexpected message type %u", netmsg_gettype(m));
+	}
+}
+
+void
+vm_init(void)
+{
+	int	i;
+
+	conn_listen(vm_accept, VM_CONN_PORT, CONN_MODE_TCP);
+	for (i = 0; i < VM_MAXCOUNT; i++) vm_reset(&allvms[i]);
+}
+
+void
+vm_killall(void)
+{
+	struct vm	*subject;
+	int		 i;
+
+	bootqueue_clear();
+
+	/* - put all VMs that are initialized into the work state;
+	 *	they work for us now. this ensures they won't reset...
+	 * - annul the callback for signaldone
+	 * - reap each VM
+	 * - you are now safe to exit
+	 */
+	for (i = 0; i < VM_MAXCOUNT; i++) {
+		subject = &allvms[i];
+
+		if (subject->initialized && subject->state != VM_ZOMBIESTATE) {
+			subject->state = VM_WORKSTATE;
+			subject->callbacks.signaldone = signaldone_annuled;
+			vm_reap(subject);
+		}
+	}
+}
+
+struct vm *
+vm_claim(uint32_t key, struct vm_interface vmi)
+{
+	struct vm	*subject;
+	int 		 i;
+
+	for (i = 0; i < VM_MAXCOUNT; i++) {
+		subject = &allvms[i];
+
+		if (subject->state == VM_READYSTATE) {
+			subject->state = VM_WORKSTATE;
+			subject->key = key;
+			subject->callbacks = vmi;
+
+			return subject;
+		}
+	}	
+
+	errno = EAGAIN;
+	return NULL;
+}
+
+struct vm *
+vm_fromkey(uint32_t key)
+{
+	int i;
+
+	for (i = 0; i < VM_MAXCOUNT; i++)
+		if (allvms[i].key == key) return &allvms[i];
+
+	errno = EINVAL;
+	return NULL;
+}
+
+static void
+signaldone_annuled(uint32_t k)
+{
+	(void)k;
+}
+
+void
+vm_release(struct vm *v)
+{
+	/* if we are still in a working state, disable
+	 * the signaldone callback and then reap
+	 */
+	if (v->state != VM_ZOMBIESTATE) {
+		v->callbacks.signaldone = signaldone_annuled;
+		vm_reap();
+	}
+
+	vm_reset();
+}
+
+void
+vm_injectfile(struct vm *v, char *label, char *data, size_t datasize)
+{
+	struct netmsg	*response;
+
+	response = netmsg_new(NETOP_SENDFILE);
+	if (response == NULL)
+		log_fatal("vm_injectfile: netmsg_new");
+
+	if (netmsg_setlabel(response, label) < 0)
+		log_fatalx("vm_injectfile: netmsg_setlabel: %s", netmsg_error(response));
+
+	if (netmsg_setdata(response, data, datasize) < 0)
+		log_fatalx("vm_injectfile: netmsg_setdata: %s", netmsg_error(response));
+
+	conn_send(v->conn, response);
+	conn_receive(v->conn, vm_getmsg);
+}
+
+void
+vm_injectline(struct vm *v, char *line)
+{
+	struct netmsg	*response;
+
+	response = netmsg_new(NETOP_SENDLINE);
+	if (response == NULL)
+		log_fatal("vm_injectline: netmsg_new");
+
+	if (netmsg_setlabel(response, label) < 0)
+		log_fatalx("vm_injectfile: netmsg_setlabel: %s", netmsg_error(response));
+
+	conn_send(v->conn, response);
+	conn_receive(v->conn, vm_getmsg);
 }

@@ -8,7 +8,7 @@ import time
 
 def open_and_close():
 	newconn = Connection()
-	newconn.connect("localhost", 443)
+	newconn.connect("localhost", 8123)
 	newconn.close()
 
 for _i in range(5):

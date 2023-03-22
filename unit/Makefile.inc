@@ -2,7 +2,7 @@ PROG=	test
 NOMAN=	noman
 SUDO=	doas
 
-TESTUSER?=	_bundled
+TESTUSER?=	_workerd
 SRCDIR?=	../../src
 RUNFLAGS?=
 

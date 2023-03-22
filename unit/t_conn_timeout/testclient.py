@@ -9,6 +9,6 @@ from timeout import *
 import time
 
 nc = Connection()
-nc.connect("eecs-digital-51.mit.edu", 443)
+nc.connect("eecs-digital-51.mit.edu", 8123)
 
 time.sleep(2)

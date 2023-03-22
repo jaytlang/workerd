@@ -5,6 +5,4 @@ SRCS+=	${SRCDIR}/conn.c	\
 	${SRCDIR}/log.c		\
 	test.c
 
-TESTUSER=	root
-
 .include <bsd.prog.mk>
