@@ -12,9 +12,9 @@
 #define USER		"_workerd"
 #define CHROOT		"/var/workerd"
 
-#define ARCHIVES	"/archives"
-#define MESSAGES	"/messages"
-#define DISKS		"/disks"
+#define ARCHIVES	CHROOT "/archives"
+#define MESSAGES	CHROOT "/messages"
+#define DISKS		CHROOT "/disks"
 
 #define MAXNAMESIZE	1024
 #define MAXFILESIZE	1048576
@@ -57,17 +57,60 @@ off_t            buffer_seek(int, off_t, int);
 struct netmsg;
 
 #define NETOP_UNUSED    	0
+
+/* will always make it all the way
+ * to the remote host; engine does not
+ * block; in memory messages -> no special handling
+ * can come inbound as a response to REQUESTLINE
+ */
 #define NETOP_SENDLINE		1
+
+/* will always make it all the way
+ * to the remote host; engine blocks
+ * on frontend; in memory message
+ */
 #define NETOP_REQUESTLINE	2
 
+/* if sent from vm, will make it all
+ * the way to the remote host; engine
+ * will block on ACK from frontend; disk
+ * message -> have to retain and store a
+ * handle to it until frontend gets back
+ *
+ * can come inbound as a response to REQUESTFILE
+ * generated and handled entirely within the
+ * engine. in this case, no specal handling is
+ * necessary after message send
+ */
 #define NETOP_SENDFILE		3
+
+/* if sent from vm, handled completely within
+ * the engine. in-memory message. engine does not
+ * block.
+ */
 #define NETOP_REQUESTFILE	4
 
+/* makes it all the way to the remote host,
+ * engine does not block, in-memory -> no special
+ * handling
+ */
 #define NETOP_TERMINATE		5
+#define NETOP_ERROR		6
 
-#define NETOP_ACK		6
-#define NETOP_ERROR		7
-#define NETOP_MAX       	8
+/* an ack, originates from the frontend
+ * engine blocks in a sendfile until this
+ * message is received, since the vm might
+ * send a sendfile and a terminate back to back
+ * and we need to make sure the sendfile goes through
+ */
+#define NETOP_ACK		7
+
+/* timeout-prevention message, only passes
+ * between frontend-client and vm-engine
+ */
+#define NETOP_HEARTBEAT		8
+
+#define NETOP_MAX       	9
 
 
 struct netmsg   *netmsg_new(uint8_t);
@@ -98,6 +141,10 @@ int              netmsg_isvalid(struct netmsg *, int *);
 
 /* conn.c */
 
+#define CONN_MODE_TCP	0
+#define CONN_MODE_TLS	1
+#define CONN_MODE_MAX	2
+
 #define CONN_PORT       8123
 
 #define CONN_CA_PATH    "/etc/ssl/authority"
@@ -106,7 +153,7 @@ int              netmsg_isvalid(struct netmsg *, int *);
 
 struct conn;
 
-void                     conn_listen(void (*)(struct conn *));
+void                     conn_listen(void (*)(struct conn *), uint16_t, int);
 void                     conn_teardown(struct conn *);
 void                     conn_teardownall(void);
 
@@ -141,10 +188,11 @@ int              msgqueue_setcachedoffset(struct msgqueue *, size_t);
 
 /* vm.c */
 
+/* should be small - constrained by core count */
 #define VM_MAXCOUNT	8
 #define VM_TIMEOUT	1
 
-#define VM_TEMPLATE	"template"
+#define VM_TEMPLATENAME	"template"
 
 #define VM_BASEIMAGE	"/home/" USER "/ubuntu.qcow2"
 #define VM_VIVADOIMAGE	"/home/" USER "/vivado.qcow2"
@@ -154,10 +202,9 @@ struct vm;
 struct vm_interface {
 	void	 (*print)(uint32_t, char *);
 	char	*(*readline)(uint32_t);
-	char	*(*loadfile)(uint32_t, size_t *);
-	void	 (*commitfile)(uint32_t, char *, size_t);
+	char	*(*loadfile)(uint32_t, char *, size_t *);
+	void	 (*commitfile)(uint32_t, char *, char *, size_t);
 
-	void	 (*signalready)(uint32_t);
 	void	 (*signaldone)(uint32_t);
 };
 
@@ -166,6 +213,6 @@ struct vm	*vm_fromkey(uint32_t);
 void		 vm_release(struct vm *);
 void		 vm_releaseall(void);
 
-
+/* send a file to the vm, send a line to the vm, other stuff */
 
 #endif /* WORKERD_H */

@@ -112,7 +112,7 @@ afterinstall:
 	${INSTALL} -o root -g ${USER} -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g wheel -m 644 ${VMCONFIG} ${DESTDIR}/etc;		\
 	${INSTALL} -o root -g wheel -m 644 ${CONFIG} ${DESTDIR}/etc
-.ifdef FAST
+.ifndef FULL
 	cd images;								\
 	mv ${BASEIMAGE} ${DESTDIR}/home/${USER};				\
 	mv ${BASEVIVADO} ${DESTDIR}/home/${USER};				\

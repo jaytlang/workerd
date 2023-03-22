@@ -98,14 +98,14 @@ msgfile_releasepath(char *oldpath)
 		log_fatal("msgfile_releasepath: asprintf for message path");
 
 	if (sscanf(oldpath, pattern, &oldid) != 1)
-		log_fatalx("msgfile_free: sscanf on %s failed to extract file id");
+		log_fatalx("msgfile_releasepath: sscanf on %s failed to extract file id");
 
 	free(pattern);
 	free(oldpath);
 
 	freefile = malloc(sizeof(struct msgfile));
 	if (freefile == NULL)
-		log_fatalx("msgfile_free: failed to allocate free file description");
+		log_fatalx("msgfile_releasepath: failed to allocate free file description");
 
 	freefile->fileid = oldid;
 	STAILQ_INSERT_HEAD(&freefiles, freefile, entries);
@@ -145,8 +145,9 @@ netmsg_new(uint8_t opcode)
 	case NETOP_REQUESTLINE:
 	case NETOP_REQUESTFILE:
 	case NETOP_TERMINATE:
-	case NETOP_ACK:
 	case NETOP_ERROR:
+	case NETOP_ACK:
+	case NETOP_HEARTBEAT:
 		descriptor = buffer_open();
 		break;
 
@@ -655,6 +656,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 	case NETOP_REQUESTLINE:
 	case NETOP_TERMINATE:
 	case NETOP_ACK:
+	case NETOP_HEARTBEAT:
 		needlabel = 0;
 		needdata = 0;
 		break;

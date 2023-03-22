@@ -9,6 +9,26 @@ def _certificates_to_ascii(calist):
 	return result
 
 class Connection:
+	def __init__(self):
+		self.conn = None
+
+	def connect(self, hostname, port):
+		self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.conn.connect((hostname, port))
+
+	def close(self):
+		if self.conn is not None:
+			self.conn.close()
+			self.conn = None
+
+	def write_bytes(self, bstring):
+		self.conn.sendall(bstring)
+
+	def read_bytes(self, mtu=1500):
+		return self.conn.recv(mtu)
+
+
+class SecureConnection(Connection):
 	def _setup_ssl_context(self):
 		self.context = ssl.create_default_context()
 
@@ -28,7 +48,7 @@ class Connection:
 		self.certfile = certfile
 		self.keyfile = keyfile
 
-		self.context = self.conn = None
+		super().__init__()
 
 	def connect(self, hostname, port):
 		if self.context is None: self._setup_ssl_context()
@@ -37,15 +57,3 @@ class Connection:
 		self.conn = self.context.wrap_socket(s, server_hostname=hostname)
 		self.conn.connect((hostname, port))
 		self.conn.do_handshake()
-
-	def close(self):
-		if self.conn is not None:
-			self.conn.close()
-			self.conn = None
-
-	def write_bytes(self, bstring):
-		self.conn.sendall(bstring)
-
-	def read_bytes(self, mtu=1500):
-		return self.conn.recv(mtu)
-

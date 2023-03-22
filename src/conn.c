@@ -24,6 +24,7 @@
 #define CONN_MTU		1500
 
 struct globalcontext {
+	int			 mode;
 	uint8_t			*tls_key;	
 	size_t 			 tls_keysize;
 
@@ -34,10 +35,10 @@ struct globalcontext {
 	struct event		 listen_event;
 };
 
-static void	globalcontext_init(void);
+static void	globalcontext_init(int);
 static void	globalcontext_teardown(void);
 
-static void	globalcontext_listen(void (*)(struct conn *));
+static void	globalcontext_listen(void (*)(struct conn *), uint16_t);
 static void	globalcontext_accept(int, short, void *);
 static void	globalcontext_stoplistening(void);
 
@@ -77,7 +78,7 @@ RB_PROTOTYPE_STATIC(conntree, conn, entries, conn_compare)
 RB_GENERATE_STATIC(conntree, conn, entries, conn_compare)
 
 static void
-globalcontext_init(void)
+globalcontext_init(int mode)
 {
 	struct tls_config	*globalcfg;
 	struct tls		*serverctx;
@@ -85,47 +86,53 @@ globalcontext_init(void)
 	uint8_t			*key;
 	size_t			 keysize;
 
-	globalcfg = tls_config_new();
-	if (globalcfg == NULL)
-		log_fatalx("globalcontext_init: can't allocate tls globalcfg");
+	if (mode < 0 || mode > CONN_MODE_MAX)
+		log_fatalx("globalcontext_init: bug - specified invalid mode %d", mode);
 
-	if (tls_config_set_ca_path(globalcfg, CONN_CA_PATH) < 0) {
-		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't set ca path to %s", CONN_CA_PATH);
+	if (mode == CONN_MODE_TLS) {
+		globalcfg = tls_config_new();
+		if (globalcfg == NULL)
+			log_fatalx("globalcontext_init: can't allocate tls globalcfg");
+	
+		if (tls_config_set_ca_path(globalcfg, CONN_CA_PATH) < 0) {
+			tls_config_free(globalcfg);
+			log_fatalx("globalcontext_init: can't set ca path to %s", CONN_CA_PATH);
+		}
+	
+		if (tls_config_set_cert_file(globalcfg, CONN_CERT) < 0) {
+			tls_config_free(globalcfg);
+			log_fatalx("globalcontext_init: can't set cert file to %s", CONN_CERT);
+		}
+	
+		if ((key = tls_load_file(CONN_KEY, &keysize, NULL)) == NULL) {
+			tls_config_free(globalcfg);
+			log_fatalx("globalcontext_init: can't load keyfile %s", CONN_KEY);
+		}
+	
+		if (tls_config_set_key_mem(globalcfg, key, keysize) < 0) {
+			tls_unload_file(key, keysize);
+			tls_config_free(globalcfg);
+			log_fatalx("globalcontext_init: can't set key memory");
+		}
+
+		tls_config_verify_client(globalcfg);
+
+		serverctx = tls_server();
+		if (serverctx == NULL)
+			log_fatalx("globalcontext_init: can't allocate tls serverctx");
+	
+		if (tls_configure(serverctx, globalcfg) < 0)
+			log_fatalx("globalcontext_init: can't configure server: %s",
+				tls_error(serverctx));
+
+		globalcontext.tls_key = key;
+		globalcontext.tls_keysize = keysize;
+	
+		globalcontext.tls_globalcfg = globalcfg;
+		globalcontext.tls_serverctx = serverctx;
 	}
 
-	if (tls_config_set_cert_file(globalcfg, CONN_CERT) < 0) {
-		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't set cert file to %s", CONN_CERT);
-	}
-
-	if ((key = tls_load_file(CONN_KEY, &keysize, NULL)) == NULL) {
-		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't load keyfile %s", CONN_KEY);
-	}
-
-	if (tls_config_set_key_mem(globalcfg, key, keysize) < 0) {
-		tls_unload_file(key, keysize);
-		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't set key memory");
-	}
-
-	tls_config_verify_client(globalcfg);
-
-	serverctx = tls_server();
-	if (serverctx == NULL)
-		log_fatalx("globalcontext_init: can't allocate tls serverctx");
-
-	if (tls_configure(serverctx, globalcfg) < 0)
-		log_fatalx("globalcontext_init: can't configure server: %s",
-			tls_error(serverctx));
-
-	globalcontext.tls_key = key;
-	globalcontext.tls_keysize = keysize;
-
-	globalcontext.tls_globalcfg = globalcfg;
-	globalcontext.tls_serverctx = serverctx;
-
+	globalcontext.mode = mode;
 	globalcontext.listen_fd = -1;
 	globalcontext_initialized = 1;
 
@@ -141,16 +148,18 @@ globalcontext_teardown(void)
 	close(globalcontext.listen_fd);
 	globalcontext.listen_fd = -1;
 
-	tls_free(globalcontext.tls_serverctx);
-	tls_config_free(globalcontext.tls_globalcfg);
-	tls_unload_file(globalcontext.tls_key, globalcontext.tls_keysize);
+	if (globalcontext.mode == CONN_MODE_TLS) {
+		tls_free(globalcontext.tls_serverctx);
+		tls_config_free(globalcontext.tls_globalcfg);
+		tls_unload_file(globalcontext.tls_key, globalcontext.tls_keysize);
+	}
 
 	bzero(&globalcontext, sizeof(struct globalcontext));	
 	globalcontext_initialized = 0;
 }
 
 static void
-globalcontext_listen(void (*cb)(struct conn *))
+globalcontext_listen(void (*cb)(struct conn *), uint16_t port)
 {
 	struct sockaddr_in	sa;
 	int			lfd, enable = 1;
@@ -163,7 +172,7 @@ globalcontext_listen(void (*cb)(struct conn *))
 
 	bzero(&sa, sizeof(struct sockaddr_in));
 	sa.sin_family = AF_INET;
-	sa.sin_port = htons(CONN_PORT);
+	sa.sin_port = htons(port);
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	if (bind(lfd, (struct sockaddr *)&sa, sizeof(struct sockaddr_in)) < 0)
@@ -187,7 +196,7 @@ static void
 globalcontext_accept(int fd, short event, void *arg)
 {
 	struct sockaddr_in	 peer;
-	struct tls		 *connctx;
+	struct tls		 *connctx = NULL;
 	struct conn		 *newconn;
 
 	socklen_t	  	  addrlen;
@@ -197,14 +206,18 @@ globalcontext_accept(int fd, short event, void *arg)
 
 	/* XXX: will this always work? i.e. could we get a RST immediately
 	 * after an incoming SYN that breaks everything and causes an error here
+	 *
+	 * a month later: i think this is probably fine, but like who knows
+	 * one heck of a corner case, but a good stackoverflow question
 	 */
 	newfd = accept4(fd, (struct sockaddr *)&peer, &addrlen,
 		SOCK_NONBLOCK | SOCK_CLOEXEC);
 
 	if (newfd < 0) log_fatal("globalcontext_accept: accept");
-
-	if (tls_accept_socket(globalcontext.tls_serverctx, &connctx, newfd) < 0)
-		log_fatalx("tls_accept_socket: %s", tls_error(globalcontext.tls_serverctx));
+	
+	if (globalcontext.mode == CONN_MODE_TLS)
+		if (tls_accept_socket(globalcontext.tls_serverctx, &connctx, newfd) < 0)
+			log_fatalx("tls_accept_socket: %s", tls_error(globalcontext.tls_serverctx));
 
 	newconn = conn_new(newfd, &peer, connctx);
 	cb(newconn);
@@ -282,7 +295,14 @@ conn_doreceive(int fd, short event, void *arg)
 
 		receivebuf = newreceivebuf;
 
-		thispacketsize = tls_read(c->tls_context, receivebuf + receivesize, CONN_MTU);
+		if (globalcontext.mode == CONN_MODE_TLS)
+			thispacketsize = tls_read(c->tls_context, receivebuf + receivesize, CONN_MTU);
+		else {
+			thispacketsize = read(c->sockfd, receivebuf + receivesize, CONN_MTU);
+			if (thispacketsize < 0 || errno == EAGAIN)
+				thispacketsize = TLS_WANT_POLLIN;
+		}
+		
 		if (thispacketsize == -1 || thispacketsize == 0) {
 			log_writex(LOGTYPE_DEBUG, "client eof it seems");
 			willteardown = 1;
@@ -339,7 +359,6 @@ conn_doreceive(int fd, short event, void *arg)
 		} else {
 			netmsg_clearerror(c->incoming_message);
 			c->cb_receive(c, c->incoming_message);
-
 			netmsg_teardown(c->incoming_message);
 			c->incoming_message = NULL;
 		}
@@ -379,7 +398,10 @@ conn_dosend(struct msgqueue *mq, struct conn *c)
 	if (netmsg_read(sendmsg, rawmsg, sendsize) != sendsize)
 		log_fatal("conn_dosend: netmsg_read failed to read %ld bytes", sendsize);
 
-	written = tls_write(c->tls_context, rawmsg, sendsize);
+	if (globalcontext.mode == CONN_MODE_TLS)
+		written = tls_write(c->tls_context, rawmsg, sendsize);
+	else 
+		written = write(c->sockfd, rawmsg, sendsize);
 
 	if (written == -1 || written == 0)
 		conn_teardown(c);
@@ -397,14 +419,14 @@ conn_dosend(struct msgqueue *mq, struct conn *c)
 
 
 void
-conn_listen(void (*cb)(struct conn *))
+conn_listen(void (*cb)(struct conn *), uint16_t port, int mode)
 {
-	if (!globalcontext_initialized) globalcontext_init();
+	if (!globalcontext_initialized) globalcontext_init(mode);
 
 	if (globalcontext.listen_fd > 0)
 		log_fatalx("conn_listen: tried to listen twice in a row");
 
-	globalcontext_listen(cb);
+	globalcontext_listen(cb, port);
 }
 
 void
@@ -426,7 +448,9 @@ conn_teardown(struct conn *c)
 	shutdown(c->sockfd, SHUT_RDWR);
 	close(c->sockfd);
 
-	tls_free(c->tls_context);
+	if (c->tls_context != NULL)
+		tls_free(c->tls_context);
+
 	free(c);
 
 	log_writex(LOGTYPE_DEBUG, "tore down connection");
