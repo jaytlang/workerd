@@ -11,6 +11,7 @@
 #include <sys/queue.h>
 #include <sys/wait.h>
 
+#include <errno.h>
 #include <event.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -28,46 +29,49 @@
 
 #define VM_NOKEY	-1
 
-#define VMCTL(ASSERT, __VA_ARGS__) do {				\
-	int	wstatus;					\
-	pid_t	pid;						\
-								\		
-	if ((pid = fork()) < 0)					\
-		log_fatal("VMCTL: fork");			\
-								\
-	if (pid == 0) {						\
-                freopen("/dev/null", "a", stdout);		\
-                freopen("/dev/null", "a", stderr);		\
-								\
-		execl(__VA_ARGS__, NULL);			\
-		log_fatal("VMCTL: execl");			\
-	}							\
-								\
-	do {							\
-		if (wait(&wstatus) < 0)				\
-			log_fatal("VMCTL: wait");		\
-	} while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));	\
-								\
-	if (WIFSIGNALED(wstatus))				\
-		log_fatalx("VMCTL: terminated by signal %d",	\
-			WTERMSIG(wstatus));			\
-								\
-	else if ((ASSERT) && WEXITSTATUS(wstatus) != 0)		\
-		log_fatalx("VMCTL: exited with status %d",	\
-			WEXITSTATUS(wstatus));			\
+#define VMCTL_PATH	"/usr/sbin/vmctl"
+
+#define VMCTL(ASSERT, ...) do {						\
+	int	wstatus;						\
+	pid_t	pid;							\
+									\
+	if ((pid = fork()) < 0)						\
+		log_fatal("VMCTL: fork");				\
+									\
+	if (pid == 0) {							\
+                /* freopen("/dev/null", "a", stdout);			\
+                 * freopen("/dev/null", "a", stderr);			\
+		 */							\
+									\
+		execl(VMCTL_PATH, VMCTL_PATH, __VA_ARGS__, NULL);	\
+		log_fatal("VMCTL: execl");				\
+	}								\
+									\
+	do {								\
+		if (wait(&wstatus) < 0)					\
+			log_fatal("VMCTL: wait");			\
+	} while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));		\
+									\
+	if (WIFSIGNALED(wstatus))					\
+		log_fatalx("VMCTL: terminated by signal %d",		\
+			WTERMSIG(wstatus));				\
+									\
+	else if ((ASSERT) && WEXITSTATUS(wstatus) != 0)			\
+		log_fatalx("VMCTL: exited with status %d",		\
+			WEXITSTATUS(wstatus));				\
 } while (0)
 
 struct vm {
-	int	 initialized;
-	int	 state;	
-	int	 key;
+	int	 	 initialized;
+	int	 	 state;	
+	uint32_t	 key;
 
-	int	 shouldheartbeat;
+	int		 shouldheartbeat;
 
-	char	*basedisk;
-	char	*vivadodisk;
+	char		*basedisk;
+	char		*vivadodisk;
 
-	char	*name;
+	char		*name;
 
 	struct conn		*conn;
 	struct vm_interface	 callbacks;
@@ -144,12 +148,8 @@ bootqueue_popfirst(void)
 static void
 bootqueue_clear(void)
 {
-	struct vm	*v;
-
-	while (!SIMPLEQ_EMPTY(&bootqueue)) {
-		v = SIMPLEQ_FIRST(&bootqueue);
+	while (!SIMPLEQ_EMPTY(&bootqueue))
 		SIMPLEQ_REMOVE_HEAD(&bootqueue, entries);
-	}
 }
 
 static void
@@ -197,7 +197,16 @@ vm_reap(struct vm *v)
 		v->conn = NULL;
 	}
 
-	VMCTL(v->state == VM_BOOTSTATE, "stop", "-fw", dead->name);
+	VMCTL(v->state == VM_BOOTSTATE, "stop", "-fw", v->name);
+
+	if (unlink(v->basedisk) < 0)
+		log_fatal("vm_reset: unlink vm base image");
+	else if (unlink(v->vivadodisk) < 0)
+		log_fatal("vm_reset: unlink vm vivado image");
+
+	free(v->basedisk);
+	free(v->vivadodisk);
+	free(v->name);
 
 	/* if we're in the work state, we have to wait
 	 * to be released by our caller. otherwise, we can
@@ -208,7 +217,7 @@ vm_reap(struct vm *v)
 		vm_reset(v);
 	} else {
 		v->state = VM_ZOMBIESTATE;
-		v->callbacks.signaldone();
+		v->callbacks.signaldone(v->key);
 	}
 }
 
@@ -224,26 +233,15 @@ vm_reset(struct vm *v)
 		v->initialized = 1;
 		v->conn = NULL;
 
-	} else if (v->state != VM_ZOMBIESTATE) {
+	} else if (v->state != VM_ZOMBIESTATE)
 		log_fatalx("vm_reset: bug: tried to reset vm in non-zombie state");
-
-	} else {
-		if (unlink(v->basedisk) < 0)
-			log_fatal("vm_reset: unlink vm base image");
-		else if (unlink(v->vivadodisk) < 0)
-			log_fatal("vm_reset: unlink vm vivado image");
-
-		free(v->basedisk);
-		free(v->vivadodisk);
-		free(v->name);
-	}
 
 	v->state = VM_BOOTSTATE;
 	v->key = VM_NOKEY;
 
 	v->shouldheartbeat = 0;
 
-	memset(v->callbacks, 0, sizeof(struct vm_interface));
+	memset(&v->callbacks, 0, sizeof(struct vm_interface));
 
 	if (asprintf(&v->basedisk, "%s/base%d.qcow2", DISKS, vmid) < 0)
 		log_fatal("vm_init: asprintf base disk name");
@@ -254,8 +252,8 @@ vm_reset(struct vm *v)
 	if (asprintf(&v->name, "vm%d", vmid) < 0)
 		log_fatal("vm_init: asprintf vm name");
 
-	VMCTL("create", "-b", VM_BASEIMAGE, v->basedisk);	
-	VMCTL("create", "-b", VM_BASEIMAGE, v->vivadodisk);
+	VMCTL(1, "create", "-b", VM_BASEIMAGE, v->basedisk);	
+	VMCTL(1, "create", "-b", VM_VIVADOIMAGE, v->vivadodisk);
 
 	bootqueue_enqboot(v);
 }
@@ -296,7 +294,7 @@ vm_accept(struct conn *c)
 	tv.tv_usec = 0;
 
 	conn_settimeout(new->conn, &tv, vm_timeout);
-	conn_setteardowncb(new->conn, &tv, vm_handleteardown);
+	conn_setteardowncb(new->conn, vm_handleteardown);
 	conn_receive(new->conn, vm_getmsg);
 }
 
@@ -360,11 +358,11 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 
 	case NETOP_SENDFILE:
 		label = netmsg_getlabel(m);
-		content = netmsg_getdata(m, (uint64_t *)(&datasize));
+		data = netmsg_getdata(m, (uint64_t *)(&datasize));
 
-		v->callbacks.commitfile(v->key, label, content, datasize);
+		v->callbacks.commitfile(v->key, label, data, datasize);
 
-		free(content);
+		free(data);
 		free(label);
 		break;
 
@@ -481,10 +479,10 @@ vm_release(struct vm *v)
 	 */
 	if (v->state != VM_ZOMBIESTATE) {
 		v->callbacks.signaldone = signaldone_annuled;
-		vm_reap();
+		vm_reap(v);
 	}
 
-	vm_reset();
+	vm_reset(v);
 }
 
 void
@@ -515,7 +513,7 @@ vm_injectline(struct vm *v, char *line)
 	if (response == NULL)
 		log_fatal("vm_injectline: netmsg_new");
 
-	if (netmsg_setlabel(response, label) < 0)
+	if (netmsg_setlabel(response, line) < 0)
 		log_fatalx("vm_injectfile: netmsg_setlabel: %s", netmsg_error(response));
 
 	conn_send(v->conn, response);

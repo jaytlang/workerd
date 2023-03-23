@@ -2,7 +2,7 @@ import signal
 
 class Timeout:
 	def _handle(self, signum, frame):
-		print(f"!!! timeout of {self._timeout} expired")
+		print(f"timeout of {self._timeout} expired")
 		exit(1)
 
 	def __init__(self, timeout):

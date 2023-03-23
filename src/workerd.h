@@ -195,7 +195,7 @@ int              msgqueue_setcachedoffset(struct msgqueue *, size_t);
 
 #define VM_TEMPLATENAME	"template"
 
-#define VM_BASEIMAGE	"/home/" USER "/ubuntu.qcow2"
+#define VM_BASEIMAGE	"/home/" USER "/base.qcow2"
 #define VM_VIVADOIMAGE	"/home/" USER "/vivado.qcow2"
 
 struct vm;
