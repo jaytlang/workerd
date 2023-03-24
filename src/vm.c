@@ -95,7 +95,7 @@ static int		 allvms_getvmindex(struct vm *);
 static void	 	 vm_reset(struct vm *);
 static struct vm	*vm_byconn(struct conn *);
 
-static void		 vm_senderror(struct vm *, const char *, ...);
+static void		 vm_reporterror(struct vm *, const char *, ...);
 static void		 vm_reap(struct vm *);
 
 static void		 vm_handleteardown(struct conn *);
@@ -153,27 +153,19 @@ bootqueue_clear(void)
 }
 
 static void
-vm_senderror(struct vm *v, const char *fmt, ...)
+vm_reporterror(struct vm *v, const char *fmt, ...)
 {
-	struct netmsg	*error;
 	char		*label;
 	va_list		 ap;
 
 	va_start(ap, fmt);
 
 	if (vasprintf(&label, fmt, ap) < 0)
-		log_fatal("vm_senderror: vasprintf");
+		log_fatal("vm_reporterror: vasprintf");
 
-	error = netmsg_new(NETOP_ERROR);
-	if (error == NULL)
-		log_fatal("vm_senderror: netmsg_new");
-
-	if (netmsg_setlabel(error, label) < 0)
-		log_fatalx("vm_senderror: netmsg_setlabel: %s", netmsg_error(error));
-
-	conn_send(v->conn, error);
-
+	v->callbacks.reporterror(v->key, label);
 	free(label);
+
 	va_end(ap);
 }
 
@@ -307,7 +299,8 @@ vm_timeout(struct conn *c)
 	v = vm_byconn(c);
 
 	if (v->shouldheartbeat) {
-		log_writex(LOGTYPE_DEBUG, "vm heartbeat timeout");
+		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm heartbeat timeout");
+		sleep(60);
 		vm_reap(v);
 	} else {
 		v->shouldheartbeat = 1;	
@@ -333,13 +326,13 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	v->shouldheartbeat = 0;
 
 	if (m == NULL || strlen(netmsg_error(m)) > 0) {
-		vm_senderror(v, "received bad message: %s",
+		vm_reporterror(v, "vm_getmsg: received bad message: %s",
 			(m == NULL) ? "unintelligble" : netmsg_error(m));
 		return;
 	}
 
 	if (v->state != VM_WORKSTATE && netmsg_gettype(m) != NETOP_HEARTBEAT) {
-		vm_senderror(v, "ignored unsolicited message");
+		vm_reporterror(v, "vm_getmsg: ignored unsolicited message");
 		return;
 	}
 
@@ -374,6 +367,14 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 		free(label);
 		break;
 
+	case NETOP_ERROR:
+		/* propagate the error, don't reap yet */
+		label = netmsg_getlabel(m);
+		v->callbacks.reporterror(v->key, label);
+
+		free(label);
+		break;
+
 	case NETOP_TERMINATE:
 		/* will call signaldone as needed, move us
 		 * to zombie state for eventual release
@@ -393,7 +394,8 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 			  v->name,			
 			  netmsg_gettype(m));
 
-		vm_senderror(v, "received unexpected message type %u", netmsg_gettype(m));
+		vm_reporterror(v, "vm_getmsg: received unexpected message type %u",
+			netmsg_gettype(m));
 	}
 }
 

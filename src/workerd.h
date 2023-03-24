@@ -207,6 +207,7 @@ struct vm_interface {
 	void	(*commitfile)(uint32_t, char *, char *, size_t);
 
 	void	(*signaldone)(uint32_t);
+	void	(*reporterror)(uint32_t, char *);
 };
 
 void		 vm_init(void);
