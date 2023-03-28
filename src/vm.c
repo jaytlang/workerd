@@ -2,7 +2,10 @@
  * virtual machine management
  * though vmctl(8)
  *
- * NOTE: this is _heavily_ pf assisted.
+ * NOTE: there's a pf rule you need
+ * for this to be fully secure, see notes
+ * in the install for details
+ *
  * (c) jay lang, 2023
  */
 
@@ -96,7 +99,7 @@ static void	 	 vm_reset(struct vm *);
 static struct vm	*vm_byconn(struct conn *);
 
 static void		 vm_reporterror(struct vm *, const char *, ...);
-static void		 vm_reap(struct vm *);
+static void		 vm_reap(struct vm *, int);
 
 static void		 vm_handleteardown(struct conn *);
 static void		 vm_accept(struct conn *);
@@ -175,7 +178,7 @@ vm_reporterror(struct vm *v, const char *fmt, ...)
  * since the song and dance to reset VMs optimistically is complex
  */
 static void
-vm_reap(struct vm *v)
+vm_reap(struct vm *v, int graceful)
 {
 	if (v->state == VM_ZOMBIESTATE)
 		log_fatalx("vm_reap: tried to reap vm twice");
@@ -209,7 +212,9 @@ vm_reap(struct vm *v)
 		vm_reset(v);
 	} else {
 		v->state = VM_ZOMBIESTATE;
-		v->callbacks.signaldone(v->key);
+
+		if (graceful) v->callbacks.signaldone(v->key);
+		else v->callbacks.reporterror(v->key, "connection to vm terminated unexpectedly");
 	}
 }
 
@@ -261,6 +266,7 @@ vm_byconn(struct conn *c)
 	log_fatalx("vm_byconn: no such conn %p", c);
 }
 
+/* VM connection blew up on us; ungraceful teardown */
 static void
 vm_handleteardown(struct conn *c)
 {
@@ -269,7 +275,7 @@ vm_handleteardown(struct conn *c)
 	dead = vm_byconn(c);
 
 	dead->conn = NULL;
-	vm_reap(dead);
+	vm_reap(dead, 0);
 }
 
 static void
@@ -299,9 +305,9 @@ vm_timeout(struct conn *c)
 	v = vm_byconn(c);
 
 	if (v->shouldheartbeat) {
+		/* line is unresponsive, kill it */
 		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm heartbeat timeout");
-		sleep(60);
-		vm_reap(v);
+		vm_reap(v, 0);
 	} else {
 		v->shouldheartbeat = 1;	
 		
@@ -312,6 +318,8 @@ vm_timeout(struct conn *c)
 
 		conn_stopreceiving(c);
 		conn_receive(c, vm_getmsg);
+
+		log_writex(LOGTYPE_DEBUG, "vm should heartbeat");
 	}
 }
 
@@ -339,20 +347,23 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	switch (netmsg_gettype(m)) {
 	case NETOP_SENDLINE:
 		label = netmsg_getlabel(m);	
+
+		conn_stopreceiving(v->conn);
 		v->callbacks.print(v->key, label);			
 
 		free(label);
 		break;
 
 	case NETOP_REQUESTLINE:
-		v->callbacks.readline(v->key);
 		conn_stopreceiving(v->conn);
+		v->callbacks.readline(v->key);
 		break;
 
 	case NETOP_SENDFILE:
 		label = netmsg_getlabel(m);
 		data = netmsg_getdata(m, (uint64_t *)(&datasize));
 
+		conn_stopreceiving(v->conn);
 		v->callbacks.commitfile(v->key, label, data, datasize);
 
 		free(data);
@@ -361,8 +372,8 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 
 	case NETOP_REQUESTFILE:
 		label = netmsg_getlabel(m);
-		v->callbacks.loadfile(v->key, label);
 		conn_stopreceiving(v->conn);
+		v->callbacks.loadfile(v->key, label);
 
 		free(label);
 		break;
@@ -370,6 +381,7 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	case NETOP_ERROR:
 		/* propagate the error, don't reap yet */
 		label = netmsg_getlabel(m);
+		conn_stopreceiving(v->conn);
 		v->callbacks.reporterror(v->key, label);
 
 		free(label);
@@ -378,10 +390,10 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	case NETOP_TERMINATE:
 		/* will call signaldone as needed, move us
 		 * to zombie state for eventual release
-		 * XXX: could probably defer this / keep the
-		 * VM alive until the client calls release, but no need...
+		 * connection stays up for now; this is a graceful
+		 * teardown
 		 */
-		vm_reap(v);
+		vm_reap(v, 1);
 		break;
 
 	case NETOP_HEARTBEAT:
@@ -419,7 +431,7 @@ vm_killall(void)
 	/* - put all VMs that are initialized into the work state;
 	 *	they work for us now. this ensures they won't reset...
 	 * - annul the callback for signaldone
-	 * - reap each VM
+	 * - reap each VM gracefully
 	 * - you are now safe to exit
 	 */
 	for (i = 0; i < VM_MAXCOUNT; i++) {
@@ -428,7 +440,7 @@ vm_killall(void)
 		if (subject->initialized && subject->state != VM_ZOMBIESTATE) {
 			subject->state = VM_WORKSTATE;
 			subject->callbacks.signaldone = signaldone_annuled;
-			vm_reap(subject);
+			vm_reap(subject, 1);
 		}
 	}
 }
@@ -481,7 +493,7 @@ vm_release(struct vm *v)
 	 */
 	if (v->state != VM_ZOMBIESTATE) {
 		v->callbacks.signaldone = signaldone_annuled;
-		vm_reap(v);
+		vm_reap(v, 1);
 	}
 
 	vm_reset(v);
@@ -517,6 +529,21 @@ vm_injectline(struct vm *v, char *line)
 
 	if (netmsg_setlabel(response, line) < 0)
 		log_fatalx("vm_injectfile: netmsg_setlabel: %s", netmsg_error(response));
+
+	conn_send(v->conn, response);
+	conn_receive(v->conn, vm_getmsg);
+}
+
+void
+vm_injectack(struct vm *v)
+{
+	struct netmsg	*response;
+
+	response = netmsg_new(NETOP_ACK);
+	if (response == NULL)
+		log_fatal("vm_injectack: netmsg_new");
+
+	log_writex(LOGTYPE_DEBUG, "ack");
 
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);

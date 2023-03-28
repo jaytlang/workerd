@@ -39,13 +39,15 @@ print(uint32_t key, char *msg)
 
 	printed = 1;
 	warnx("from vm: %s", msg);
+
+	vm_injectack(vm_fromkey(key));
 }
 
 static void
 fail(uint32_t key, char *msg)
 {
 	if (key != TEST_KEY) errx(1, "got error from unknown vm");
-	errx(1, "from vm: error %s", msg);	
+	errx(1, "error callback: %s", msg);	
 }
 
 static void

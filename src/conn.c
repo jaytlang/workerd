@@ -280,11 +280,6 @@ conn_doreceive(int fd, short event, void *arg)
 		return;
 	}
 
-	if (event & EV_TIMEOUT) {
-		c->cb_timeout(c);
-		return;
-	}
-
 	for (;;) {
 		ssize_t		 thispacketsize;
 		char		*newreceivebuf;

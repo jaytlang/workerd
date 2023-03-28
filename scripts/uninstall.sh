@@ -28,6 +28,7 @@ doas rm -f /etc/signify/bundled.pub
 doas rm -f /etc/workerd.conf
 
 doas rm -f /etc/vm.conf
+doas vmctl stop -fwa
 doas rcctl stop vmd
 doas rcctl start vmd
 

@@ -219,5 +219,6 @@ void		 vm_release(struct vm *);
 
 void		 vm_injectfile(struct vm *, char *, char *, size_t);
 void		 vm_injectline(struct vm *, char *);
+void		 vm_injectack(struct vm *);
 
 #endif /* WORKERD_H */
