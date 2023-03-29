@@ -29,17 +29,12 @@ static struct event	endtimer;
 
 static struct vm_interface vmi = { .print = print, .signaldone = ackdone, .reporterror = fail };
 
-static int	printed = 0;
 int		debug = 1, verbose = 1;
 
 static void
 print(uint32_t key, char *msg)
 {
-	if (key != TEST_KEY) errx(1, "got print request from unknown vm");
-
-	printed = 1;
-	warnx("from vm: %s", msg);
-
+	warnx("print from vm: %s", msg);
 	vm_injectack(vm_fromkey(key));
 }
 
@@ -48,20 +43,18 @@ fail(uint32_t key, char *msg)
 {
 	if (key != TEST_KEY) errx(1, "got error from unknown vm");
 
+	warnx("error callback: %s", msg);	
 	vm_killall();
-	errx(1, "error callback: %s", msg);	
+	exit(0);
 }
 
 static void
 ackdone(uint32_t key)
 {
-	warnx("finishing up...");
 	if (key != TEST_KEY) errx(1, "got termination notification from unknown vm");
-	else if (!printed) errx(1, "terminated vm without printing");
 
-	vm_release(vm_fromkey(key));
 	vm_killall();
-	exit(0);
+	errx(1, "vm terminated successfully without throwing error");
 }
 
 static void
