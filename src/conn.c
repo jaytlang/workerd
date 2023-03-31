@@ -300,6 +300,7 @@ conn_doreceive(int fd, short event, void *arg)
 		
 		if (thispacketsize == -1 || thispacketsize == 0) {
 			log_writex(LOGTYPE_DEBUG, "client eof it seems");
+			sleep(60);
 			willteardown = 1;
 			break;	
 		} else if (thispacketsize == TLS_WANT_POLLIN || thispacketsize == TLS_WANT_POLLOUT) {
@@ -346,15 +347,20 @@ conn_doreceive(int fd, short event, void *arg)
 				 */
 				c->cb_receive(c, c->incoming_message);
 
-				netmsg_teardown(c->incoming_message);
-				c->incoming_message = NULL;
+				if (RB_FIND(conntree, &allcons, c) != NULL) {
+					netmsg_teardown(c->incoming_message);
+					c->incoming_message = NULL;
+				}
 			}
 
 		} else {
 			netmsg_clearerror(c->incoming_message);
 			c->cb_receive(c, c->incoming_message);
-			netmsg_teardown(c->incoming_message);
-			c->incoming_message = NULL;
+
+			if (RB_FIND(conntree, &allcons, c) != NULL) {
+				netmsg_teardown(c->incoming_message);
+				c->incoming_message = NULL;
+			}
 		}
 	}
 

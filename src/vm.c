@@ -42,9 +42,10 @@
 		log_fatal("VMCTL: fork");				\
 									\
 	if (pid == 0) {							\
-                /* freopen("/dev/null", "a", stdout);			\
-                 * freopen("/dev/null", "a", stderr);			\
-		 */							\
+		if (!debug) {						\
+                	freopen("/dev/null", "a", stdout);		\
+			freopen("/dev/null", "a", stderr);		\
+		}							\
 									\
 		execl(VMCTL_PATH, VMCTL_PATH, __VA_ARGS__, NULL);	\
 		log_fatal("VMCTL: execl");				\
@@ -195,9 +196,9 @@ vm_reap(struct vm *v, int graceful)
 	VMCTL(v->state == VM_BOOTSTATE, "stop", "-fw", v->name);
 
 	if (unlink(v->basedisk) < 0)
-		log_fatal("vm_reset: unlink vm base image");
+		log_fatal("vm_reap: unlink vm base image");
 	else if (unlink(v->vivadodisk) < 0)
-		log_fatal("vm_reset: unlink vm vivado image");
+		log_fatal("vm_reap: unlink vm vivado image");
 
 	free(v->basedisk);
 	free(v->vivadodisk);
@@ -309,6 +310,7 @@ vm_timeout(struct conn *c)
 		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm heartbeat timeout");
 		vm_reap(v, 0);
 	} else {
+		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm should heartbeat");
 		v->shouldheartbeat = 1;	
 		
 		heartbeat = netmsg_new(NETOP_HEARTBEAT);
@@ -318,8 +320,6 @@ vm_timeout(struct conn *c)
 
 		conn_stopreceiving(c);
 		conn_receive(c, vm_getmsg);
-
-		log_writex(LOGTYPE_DEBUG, "vm should heartbeat");
 	}
 }
 
@@ -340,7 +340,7 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	}
 
 	if (v->state != VM_WORKSTATE && netmsg_gettype(m) != NETOP_HEARTBEAT) {
-		vm_reporterror(v, "vm_getmsg: ignored unsolicited message");
+		log_writex(LOGTYPE_DEBUG, "WARNING: ignoring unsolicited message of type %u", netmsg_gettype(m));
 		return;
 	}
 
@@ -488,8 +488,8 @@ signaldone_annuled(uint32_t k)
 void
 vm_release(struct vm *v)
 {
-	/* if we are still in a working state, disable
-	 * the signaldone callback and then reap
+	/* if we are still in a working state, this is basically
+	 * asking us to reap. client will 
 	 */
 	if (v->state != VM_ZOMBIESTATE) {
 		v->callbacks.signaldone = signaldone_annuled;
@@ -542,8 +542,6 @@ vm_injectack(struct vm *v)
 	response = netmsg_new(NETOP_ACK);
 	if (response == NULL)
 		log_fatal("vm_injectack: netmsg_new");
-
-	log_writex(LOGTYPE_DEBUG, "ack");
 
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);

@@ -1,2 +1,2 @@
 print("this program is extremely broken!")
-bork bork bork
+raise ValueError("i am broken")

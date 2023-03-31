@@ -190,7 +190,7 @@ int              msgqueue_setcachedoffset(struct msgqueue *, size_t);
 /* vm.c */
 
 /* should be small - constrained by core count */
-#define VM_MAXCOUNT	8
+#define VM_MAXCOUNT	4
 #define VM_TIMEOUT	1
 
 #define VM_TEMPLATENAME	"template"
