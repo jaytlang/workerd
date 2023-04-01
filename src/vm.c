@@ -285,6 +285,8 @@ vm_accept(struct conn *c)
 	struct vm	*new;
 	struct timeval	 tv;
 
+	log_writex(LOGTYPE_DEBUG, "accepted connection from new vm");
+
 	new = bootqueue_popfirst();	
 	new->state = VM_READYSTATE;
 	new->conn = c;	
@@ -334,8 +336,9 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 	v->shouldheartbeat = 0;
 
 	if (m == NULL || strlen(netmsg_error(m)) > 0) {
-		vm_reporterror(v, "vm_getmsg: received bad message: %s",
-			(m == NULL) ? "unintelligble" : netmsg_error(m));
+		if (v->state == VM_WORKSTATE)
+			vm_reporterror(v, "vm_getmsg: received bad message: %s",
+				(m == NULL) ? "unintelligble" : netmsg_error(m));
 		return;
 	}
 

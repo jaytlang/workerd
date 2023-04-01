@@ -221,4 +221,125 @@ void		 vm_injectfile(struct vm *, char *, char *, size_t);
 void		 vm_injectline(struct vm *, char *);
 void		 vm_injectack(struct vm *);
 
+/* ipcmsg.c */
+
+struct ipcmsg;
+
+struct ipcmsg	*ipcmsg_new(uint32_t, char *);
+void		 ipcmsg_teardown(struct ipcmsg *);
+
+uint32_t	 ipcmsg_getkey(struct ipcmsg *);
+char		*ipcmsg_getmsg(struct ipcmsg *);
+
+char		*ipcmsg_marshal(struct ipcmsg *, uint16_t *);
+struct ipcmsg	*ipcmsg_unmarshal(char *, uint16_t);
+
+/* proc.c */
+
+#define PROC_PARENT	0
+#define PROC_FRONTEND  	1
+#define PROC_ENGINE   	2
+#define PROC_MAX      	3
+
+#define SIGEV_HUP       0
+#define SIGEV_INT       1
+#define SIGEV_TERM      2
+#define SIGEV_PIPE	3
+#define SIGEV_MAX       4
+
+#define IMSG_HELLO              0
+#define IMSG_INITFD             1
+
+/* frontend -> parent */
+#define IMSG_PUTARCHIVE		2
+
+/* parent -> engine */
+#define IMSG_NEWJOB		3
+
+/* engine -> frontend, on behalf of the VM */
+#define IMSG_E2F_SENDLINE	4
+#define IMSG_E2F_REQUESTLINE	5
+#define IMSG_E2F_ERROR		6
+
+/* frontend -> engine */
+#define IMSG_F2E_SENDLINE	7
+#define IMSG_F2E_ACK		8
+
+/* engine -> parent, on behalf of the VM
+ *
+ * ======== SAVEFILE and LOADFILE access disk ======== 
+ */
+#define IMSG_E2P_SAVEFILE	9
+#define IMSG_E2P_LOADFILE	10
+#define IMSG_E2P_FINALIZE	11
+#define IMSG_E2P_REPORTERROR	12
+
+/* parent -> engine */
+#define IMSG_P2E_SAVEFILEACK	13
+#define IMSG_P2E_LOADEDFILE	14
+#define IMSG_P2E_TEARDOWN	15
+
+/* 
+
+/* frontend -> engine */
+#define IMSG_SENDLINE		4
+#define IMSG_SENDFILE		5
+#define IMSG_CLIENTACK		6
+#define IMSG_TERMINATE		7
+
+/* engine -> frontend */
+#define IMSG_FINISHWITHFILE	8
+#define IMSG_ENGINEERROR	9
+
+#define IMSG_MAX                10
+
+struct proc;
+
+struct proc	*proc_new(int);
+
+void		 proc_handlesigev(struct proc *, int, void (*)(int, short, void *));
+void		 proc_setchroot(struct proc *, char *);
+void		 proc_setuser(struct proc *, char *);
+
+void		 proc_startall(struct proc *, struct proc *, struct proc *);
+
+void    	 myproc_send(int, int, int, struct ipcmsg *);
+void    	 myproc_listen(int, void (*cb)(int, int, struct ipcmsg *));
+void    	 myproc_stoplisten(int);
+int		 myproc_ischrooted(void);
+
+void		 frontend_launch(void);
+__dead void	 frontend_signal(int, short, void *);
+
+void		 engine_launch(void);
+__dead void	 engine_signal(int, short, void *);
+
+
+/* archive.c */
+
+#define ARCHIVE_MAXFILES 100
+
+struct archive;
+
+struct archive	*archive_new(uint32_t);
+struct archive	*archive_fromfile(uint32_t, char *);
+struct archive	*archive_fromkey(uint32_t);
+
+void		 archive_teardown(struct archive *);
+void		 archive_teardownall(void);
+
+int		 archive_addfile(struct archive *, char *, char *, size_t);
+int		 archive_hasfile(struct archive *, char *);
+char		*archive_loadfile(struct archive *, char *, size_t *);
+
+uint32_t	 archive_getcrc32(struct archive *);
+char		*archive_getsignature(struct archive *);
+void		 archive_writesignature(struct archive *, char *);
+
+char		*archive_error(struct archive *);
+int		 archive_isvalid(struct archive *);
+
+char		*archive_getpath(struct archive *);
+
+
 #endif /* WORKERD_H */

@@ -4,9 +4,12 @@ BINDIR?=	/usr/sbin
 
 SRCS=	buffer.c	\
 	conn.c		\
+	ipcmsg.c	\
 	log.c		\
 	msgqueue.c	\
 	netmsg.c	\
+	proc.c		\
+	vm.c
 
 COPTS+= -Wall -Wextra -Werror -pedantic -I..
 COPTS+= -Wno-unused-function -Wno-unneeded-internal-declaration 

@@ -10,12 +10,12 @@
 
 #include "workerd.h"
 
-#define TEST_TIMEOUT		30
+#define TEST_TIMEOUT		90
 #define TEST_POLL_INTERVAL	1
+#define TEST_KEY		69420
 
 #define TEST_SCRIPTNAME		"build.py"
 #define TEST_SCRIPTMAXSIZE	10240
-#define TEST_KEY		69420
 
 static void	print(uint32_t, char *);
 static void	fail(uint32_t, char *);
@@ -29,27 +29,33 @@ static struct event	endtimer;
 
 static struct vm_interface vmi = { .print = print, .signaldone = ackdone, .reporterror = fail };
 
-static int	printed = 0;
+static int	accepted = 0;
 int		debug = 1, verbose = 1;
 
 static void
 print(uint32_t key, char *msg)
 {
-	printed = 1;
-	warnx("from vm %u: %s", key, msg);
+	if (key != TEST_KEY) errx(1, "got print request from unknown vm");
+
+	warnx("from vm: %s", msg);
+	vm_injectack(vm_fromkey(key));
 }
 
 static void
 fail(uint32_t key, char *msg)
 {
+	if (key != TEST_KEY) errx(1, "got error from unknown vm");
+
 	vm_killall();
-	errx(1, "error callback from vm %u: %s", key, msg);	
+	errx(1, "error callback: %s", msg);	
 }
 
 static void
 ackdone(uint32_t key)
 {
-	warnx("finishing up");
+	warnx("finishing up...");
+	if (key != TEST_KEY) errx(1, "got termination notification from unknown vm");
+
 	vm_release(vm_fromkey(key));
 	vm_killall();
 	exit(0);
@@ -79,7 +85,12 @@ bootpoll(int fd, short event, void *arg)
 		size_t	 datasize;
 		int	 fd;
 
-		warnx("noticed vm online, key = %u", TEST_KEY);
+		warnx("noticed vm online");
+
+		if (++accepted > 1) {
+			vm_killall();
+			errx(1, "accepted connections from multiple vms, firewall rule not working");
+		}
 
 		if ((fd = open(TEST_SCRIPTNAME, O_RDONLY)) < 0)
 			err(1, "open %s", TEST_SCRIPTNAME);
@@ -91,11 +102,13 @@ bootpoll(int fd, short event, void *arg)
 		close(fd);
 
 	} else if (errno == EAGAIN) {
-		tv.tv_sec = TEST_POLL_INTERVAL;
-		tv.tv_usec = 0;
-		evtimer_add(&boottimer, &tv);
+		warnx("poll...");
 
-	} else err(1, "received unexpected error from vm_claim");
+	} else err(1, "vm_claim returned unexpected error");
+
+	tv.tv_sec = TEST_POLL_INTERVAL;
+	tv.tv_usec = 0;
+	evtimer_add(&boottimer, &tv);
 
 	(void)fd;
 	(void)event;
