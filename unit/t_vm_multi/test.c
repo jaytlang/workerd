@@ -13,8 +13,8 @@
 #define TEST_TIMEOUT		120
 #define TEST_POLL_INTERVAL	1
 
-#define TEST_SCRIPTNAME		"build.py"
-#define TEST_SCRIPTMAXSIZE	10240
+#define TEST_BUNDLENAME		"build.bundle"
+#define TEST_BUNDLEMAXSIZE	10240
 
 #define TEST_NVMS		3
 
@@ -88,13 +88,13 @@ bootpoll(int fd, short event, void *arg)
 
 		warnx("noticed vm online, key = %u", key++);
 
-		if ((fd = open(TEST_SCRIPTNAME, O_RDONLY)) < 0)
-			err(1, "open %s", TEST_SCRIPTNAME);
+		if ((fd = open(TEST_BUNDLENAME, O_RDONLY)) < 0)
+			err(1, "open %s", TEST_BUNDLENAME);
 
-		if ((datasize = read(fd, data, TEST_SCRIPTMAXSIZE)) < 0)
-			err(1, "read %s", TEST_SCRIPTNAME);
+		if ((datasize = read(fd, data, TEST_BUNDLEMAXSIZE)) < 0)
+			err(1, "read %s", TEST_BUNDLENAME);
 
-		vm_injectfile(new, TEST_SCRIPTNAME, data, datasize);
+		vm_injectfile(new, TEST_BUNDLENAME, data, datasize);
 		close(fd);
 
 	} else if (errno != EAGAIN) err(1, "vm_claim returned unexpected error");

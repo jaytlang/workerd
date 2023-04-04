@@ -373,14 +373,6 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 		free(label);
 		break;
 
-	case NETOP_REQUESTFILE:
-		label = netmsg_getlabel(m);
-		conn_stopreceiving(v->conn);
-		v->callbacks.loadfile(v->key, label);
-
-		free(label);
-		break;
-
 	case NETOP_ERROR:
 		/* propagate the error, don't reap yet */
 		label = netmsg_getlabel(m);

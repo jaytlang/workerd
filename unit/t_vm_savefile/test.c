@@ -15,15 +15,13 @@
 #define TEST_POLL_INTERVAL	1
 #define TEST_KEY		69420
 
-#define TEST_SCRIPTNAME		"build.py"
-#define TEST_SCRIPTMAXSIZE	10240
+#define TEST_BUNDLENAME		"build.bundle"
+#define TEST_BUNDLEMAXSIZE	10240
 
 #define TEST_FILENAME		"testfile.txt"
-#define TEST_INITCONTENT	"hi there"
 #define TEST_FINALCONTENT	"hi there, friend"
 
 static void	print(uint32_t, char *);
-static void	loadfile(uint32_t, char *);
 static void	commitfile(uint32_t, char *, char *, size_t);
 static void	fail(uint32_t, char *);
 static void	ackdone(uint32_t);
@@ -35,7 +33,6 @@ static struct event     boottimer;
 static struct event	endtimer;
 
 static struct vm_interface vmi = {	.print = print,
-					.loadfile = loadfile,
 					.commitfile = commitfile,
 					.signaldone = ackdone,
 					.reporterror = fail };
@@ -50,20 +47,6 @@ print(uint32_t key, char *msg)
 
 	warnx("from vm: %s", msg);
 	vm_injectack(vm_fromkey(key));
-}
-
-static void
-loadfile(uint32_t key, char *filename)
-{
-	if (key != TEST_KEY) errx(1, "got error from unknown vm");
-
-	warnx("requested file %s", filename);
-	if (strcmp(filename, TEST_FILENAME) != 0) {
-		vm_killall();
-		errx(1, "requested bad filename %s", filename);
-	}
-
-	vm_injectfile(vm_fromkey(key), TEST_FILENAME, TEST_INITCONTENT, strlen(TEST_INITCONTENT));
 }
 
 static void
@@ -141,13 +124,13 @@ bootpoll(int fd, short event, void *arg)
 
 		warnx("noticed vm online");
 
-		if ((fd = open(TEST_SCRIPTNAME, O_RDONLY)) < 0)
-			err(1, "open %s", TEST_SCRIPTNAME);
+		if ((fd = open(TEST_BUNDLENAME, O_RDONLY)) < 0)
+			err(1, "open %s", TEST_BUNDLENAME);
 
-		if ((datasize = read(fd, data, TEST_SCRIPTMAXSIZE)) < 0)
-			err(1, "read %s", TEST_SCRIPTNAME);
+		if ((datasize = read(fd, data, TEST_BUNDLEMAXSIZE)) < 0)
+			err(1, "read %s", TEST_BUNDLENAME);
 
-		vm_injectfile(new, TEST_SCRIPTNAME, data, datasize);
+		vm_injectfile(new, TEST_BUNDLENAME, data, datasize);
 		close(fd);
 
 	} else if (errno == EAGAIN) {

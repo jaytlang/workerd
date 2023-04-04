@@ -143,7 +143,6 @@ netmsg_new(uint8_t opcode)
 
 	case NETOP_SENDLINE:
 	case NETOP_REQUESTLINE:
-	case NETOP_REQUESTFILE:
 	case NETOP_TERMINATE:
 	case NETOP_ERROR:
 	case NETOP_ACK:
@@ -647,7 +646,6 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		break;
 
 	case NETOP_SENDLINE:
-	case NETOP_REQUESTFILE:
 	case NETOP_ERROR:
 		needlabel = 1;
 		needdata = 0;

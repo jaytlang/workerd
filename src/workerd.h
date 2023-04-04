@@ -76,26 +76,15 @@ struct netmsg;
  * will block on ACK from frontend; disk
  * message -> have to retain and store a
  * handle to it until frontend gets back
- *
- * can come inbound as a response to REQUESTFILE
- * generated and handled entirely within the
- * engine. in this case, no specal handling is
- * necessary after message send
  */
 #define NETOP_SENDFILE		3
-
-/* if sent from vm, handled completely within
- * the engine. in-memory message. engine does not
- * block.
- */
-#define NETOP_REQUESTFILE	4
 
 /* makes it all the way to the remote host,
  * engine does not block, in-memory -> no special
  * handling
  */
-#define NETOP_TERMINATE		5
-#define NETOP_ERROR		6
+#define NETOP_TERMINATE		4
+#define NETOP_ERROR		5
 
 /* an ack, originates from the frontend
  * engine blocks in a sendfile until this
@@ -103,14 +92,14 @@ struct netmsg;
  * send a sendfile and a terminate back to back
  * and we need to make sure the sendfile goes through
  */
-#define NETOP_ACK		7
+#define NETOP_ACK		6
 
 /* timeout-prevention message, only passes
  * between frontend-client and vm-engine
  */
-#define NETOP_HEARTBEAT		8
+#define NETOP_HEARTBEAT		7
 
-#define NETOP_MAX       	9
+#define NETOP_MAX       	8
 
 
 struct netmsg   *netmsg_new(uint8_t);
@@ -203,7 +192,6 @@ struct vm;
 struct vm_interface {
 	void	(*print)(uint32_t, char *);
 	void	(*readline)(uint32_t);
-	void	(*loadfile)(uint32_t, char *);
 	void	(*commitfile)(uint32_t, char *, char *, size_t);
 
 	void	(*signaldone)(uint32_t);
@@ -279,8 +267,6 @@ struct ipcmsg	*ipcmsg_unmarshal(char *, uint16_t);
 #define IMSG_P2E_LOADEDFILE	14
 #define IMSG_P2E_TEARDOWN	15
 
-/* 
-
 /* frontend -> engine */
 #define IMSG_SENDLINE		4
 #define IMSG_SENDFILE		5
@@ -313,33 +299,6 @@ __dead void	 frontend_signal(int, short, void *);
 
 void		 engine_launch(void);
 __dead void	 engine_signal(int, short, void *);
-
-
-/* archive.c */
-
-#define ARCHIVE_MAXFILES 100
-
-struct archive;
-
-struct archive	*archive_new(uint32_t);
-struct archive	*archive_fromfile(uint32_t, char *);
-struct archive	*archive_fromkey(uint32_t);
-
-void		 archive_teardown(struct archive *);
-void		 archive_teardownall(void);
-
-int		 archive_addfile(struct archive *, char *, char *, size_t);
-int		 archive_hasfile(struct archive *, char *);
-char		*archive_loadfile(struct archive *, char *, size_t *);
-
-uint32_t	 archive_getcrc32(struct archive *);
-char		*archive_getsignature(struct archive *);
-void		 archive_writesignature(struct archive *, char *);
-
-char		*archive_error(struct archive *);
-int		 archive_isvalid(struct archive *);
-
-char		*archive_getpath(struct archive *);
 
 
 #endif /* WORKERD_H */
