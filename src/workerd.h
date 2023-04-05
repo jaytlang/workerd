@@ -12,15 +12,18 @@
 #define USER		"_workerd"
 #define CHROOT		"/var/workerd"
 
-#define ARCHIVES	CHROOT "/archives"
-#define MESSAGES	CHROOT "/messages"
-#define DISKS		CHROOT "/disks"
+#define FRONTEND_MESSAGES	CHROOT "/fmessages"
+#define ENGINE_MESSAGES		CHROOT "/emessages"
+#define MESSAGES		((myproc() == PROC_ENGINE) ? ENGINE_MESSAGES : FRONTEND_MESSAGES)
 
-#define MAXNAMESIZE	1024
-#define MAXFILESIZE	1048576
-#define MAXSIGSIZE	177
+#define WRITEBACK		CHROOT "/writeback"
+#define DISKS			CHROOT "/disks"
 
-#define ERRSTRSIZE	2048
+#define MAXNAMESIZE		1024
+#define MAXFILESIZE		1048576
+#define MAXSIGSIZE		177
+
+#define ERRSTRSIZE		2048
 
 extern char *__progname;
 extern int debug, verbose;
@@ -135,10 +138,12 @@ int              netmsg_isvalid(struct netmsg *, int *);
 #define CONN_MODE_MAX	2
 
 #define FRONTEND_CONN_PORT	443
+#define FRONTEND_TIMEOUT	1
 #define VM_CONN_PORT		8123
+#define VM_TIMEOUT		1
 
 #define CONN_CA_PATH    "/etc/ssl/authority"
-#define CONN_CERT       "/etc/ssl/serverchain.pem"
+#define CONN_CERT       "/etc/ssl/server.pem"
 #define CONN_KEY        "/etc/ssl/private/server.key"
 
 struct conn;
@@ -180,12 +185,12 @@ int              msgqueue_setcachedoffset(struct msgqueue *, size_t);
 
 /* should be small - constrained by core count */
 #define VM_MAXCOUNT	4
-#define VM_TIMEOUT	1
 
 #define VM_TEMPLATENAME	"template"
 
 #define VM_BASEIMAGE	"/home/" USER "/base.qcow2"
 #define VM_VIVADOIMAGE	"/home/" USER "/vivado.qcow2"
+#define VMCTL_PATH	"/usr/sbin/vmctl"
 
 struct vm;
 
@@ -208,6 +213,9 @@ void		 vm_release(struct vm *);
 void		 vm_injectfile(struct vm *, char *, char *, size_t);
 void		 vm_injectline(struct vm *, char *);
 void		 vm_injectack(struct vm *);
+
+void		 vm_setaux(struct vm *, void *);
+void		*vm_clearaux(struct vm *);
 
 /* ipcmsg.c */
 
@@ -238,46 +246,19 @@ struct ipcmsg	*ipcmsg_unmarshal(char *, uint16_t);
 #define IMSG_HELLO              0
 #define IMSG_INITFD             1
 
-/* frontend -> parent */
 #define IMSG_PUTARCHIVE		2
 
-/* parent -> engine */
-#define IMSG_NEWJOB		3
-
-/* engine -> frontend, on behalf of the VM */
-#define IMSG_E2F_SENDLINE	4
-#define IMSG_E2F_REQUESTLINE	5
-#define IMSG_E2F_ERROR		6
-
-/* frontend -> engine */
-#define IMSG_F2E_SENDLINE	7
-#define IMSG_F2E_ACK		8
-
-/* engine -> parent, on behalf of the VM
- *
- * ======== SAVEFILE and LOADFILE access disk ======== 
- */
-#define IMSG_E2P_SAVEFILE	9
-#define IMSG_E2P_LOADFILE	10
-#define IMSG_E2P_FINALIZE	11
-#define IMSG_E2P_REPORTERROR	12
-
-/* parent -> engine */
-#define IMSG_P2E_SAVEFILEACK	13
-#define IMSG_P2E_LOADEDFILE	14
-#define IMSG_P2E_TEARDOWN	15
-
-/* frontend -> engine */
+#define IMSG_SENDFILE		3
 #define IMSG_SENDLINE		4
-#define IMSG_SENDFILE		5
+#define IMSG_REQUESTLINE	5
 #define IMSG_CLIENTACK		6
-#define IMSG_TERMINATE		7
+#define IMSG_INITIALIZED	7
 
-/* engine -> frontend */
-#define IMSG_FINISHWITHFILE	8
-#define IMSG_ENGINEERROR	9
+#define IMSG_REQUESTTERM	8
+#define IMSG_TERMINATE		9
+#define IMSG_ERROR		10
 
-#define IMSG_MAX                10
+#define IMSG_MAX                11
 
 struct proc;
 
@@ -289,6 +270,7 @@ void		 proc_setuser(struct proc *, char *);
 
 void		 proc_startall(struct proc *, struct proc *, struct proc *);
 
+int		 myproc(void);
 void    	 myproc_send(int, int, int, struct ipcmsg *);
 void    	 myproc_listen(int, void (*cb)(int, int, struct ipcmsg *));
 void    	 myproc_stoplisten(int);
@@ -300,5 +282,20 @@ __dead void	 frontend_signal(int, short, void *);
 void		 engine_launch(void);
 __dead void	 engine_signal(int, short, void *);
 
+/* general use */
+
+__attribute__((unused)) static void
+nothing(int a, int b, struct ipcmsg *c)
+{
+	(void)a;
+	(void)b;
+	(void)c;
+}
+
+/* wbfile.c */
+
+char	*wbfile_writeback(char *, char *, size_t);
+void	 wbfile_readout(char *, char **, char **, size_t *);
+void	 wbfile_teardown(char *);
 
 #endif /* WORKERD_H */

@@ -5,13 +5,13 @@ from enum import IntEnum
 
 # these are in bundled.h
 class MessageOp(IntEnum):
-	SENDLINE = 1
-	REQUESTLINE = 2
-	SENDFILE = 3
-	TERMINATE = 4
-	ERROR = 5
+	SIGN = 1
+	WRITE = 2
+	GETBUNDLE = 3
+	HEARTBEAT = 4
+	BUNDLE = 5
 	ACK = 6
-	HEARTBEAT = 7
+	ERROR = 7
 
 MESSAGE_INCOMPLETE = -69
 
@@ -91,13 +91,13 @@ class Message:
 		except ValueError:
 			raise ValueError(f"invalid opcode {opcode} received")
 
-		if opcode in [MessageOp.REQUESTLINE, MessageOp.TERMINATE, MessageOp.ACK, MessageOp.HEARTBEAT]:
+		if opcode in [MessageOp.SIGN, MessageOp.GETBUNDLE, MessageOp.HEARTBEAT, MessageOp.ACK]:
 			return cls(opcode)
 
 		try: label = MessageField.from_bytes(bytes[1:])
 		except IndexError: return MESSAGE_INCOMPLETE
 
-		if opcode in [MessageOp.SENDLINE, MessageOp.ERROR]:
+		if opcode == MessageOp.ERROR:
 			return cls(opcode, label=label.content())
 
 		try:

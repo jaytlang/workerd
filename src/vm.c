@@ -32,8 +32,6 @@
 
 #define VM_NOKEY	-1
 
-#define VMCTL_PATH	"/usr/sbin/vmctl"
-
 #define VMCTL(ASSERT, ...) do {						\
 	int	wstatus;						\
 	pid_t	pid;							\
@@ -76,6 +74,7 @@ struct vm {
 	char		*vivadodisk;
 
 	char		*name;
+	void		*aux;
 
 	struct conn		*conn;
 	struct vm_interface	 callbacks;
@@ -210,10 +209,12 @@ vm_reap(struct vm *v, int graceful)
 	 */
 	if (v->state != VM_WORKSTATE) {
 		v->state = VM_ZOMBIESTATE;
+		log_writex(LOGTYPE_DEBUG, "resetting zombie vm");
 		vm_reset(v);
 	} else {
 		v->state = VM_ZOMBIESTATE;
 
+		log_writex(LOGTYPE_DEBUG, "calling back work state vm reap, graceful = %d", graceful);
 		if (graceful) v->callbacks.signaldone(v->key);
 		else v->callbacks.reporterror(v->key, "connection to vm terminated unexpectedly");
 	}
@@ -225,6 +226,7 @@ vm_reset(struct vm *v)
 {
 	int	vmid;
 
+	log_writex(LOGTYPE_DEBUG, "resetting vm");
 	vmid = allvms_getvmindex(v);
 
 	if (!v->initialized) {
@@ -249,6 +251,8 @@ vm_reset(struct vm *v)
 
 	if (asprintf(&v->name, "vm%d", vmid) < 0)
 		log_fatal("vm_init: asprintf vm name");
+
+	vm_clearaux(v);
 
 	VMCTL(1, "create", "-b", VM_BASEIMAGE, v->basedisk);	
 	VMCTL(1, "create", "-b", VM_VIVADOIMAGE, v->vivadodisk);
@@ -312,7 +316,6 @@ vm_timeout(struct conn *c)
 		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm heartbeat timeout");
 		vm_reap(v, 0);
 	} else {
-		log_writex(LOGTYPE_DEBUG, "vm_timeout: vm should heartbeat");
 		v->shouldheartbeat = 1;	
 		
 		heartbeat = netmsg_new(NETOP_HEARTBEAT);
@@ -486,6 +489,7 @@ vm_release(struct vm *v)
 	/* if we are still in a working state, this is basically
 	 * asking us to reap. client will 
 	 */
+	log_writex(LOGTYPE_DEBUG, "releasing VM");
 	if (v->state != VM_ZOMBIESTATE) {
 		v->callbacks.signaldone = signaldone_annuled;
 		vm_reap(v, 1);
@@ -540,4 +544,20 @@ vm_injectack(struct vm *v)
 
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);
+}
+
+void
+vm_setaux(struct vm *v, void *aux)
+{
+	v->aux = aux;
+}
+
+void *
+vm_clearaux(struct vm *v)
+{
+	void	*old;
+
+	old = v->aux;
+	v->aux = NULL;
+	return old;
 }

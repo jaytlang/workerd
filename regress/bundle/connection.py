@@ -1,8 +1,6 @@
 import socket
 import ssl
 
-class ConnectionClosedException(Exception): pass
-
 def _certificates_to_ascii(calist):
 	result = ""
 	for path in calist:
@@ -49,6 +47,5 @@ class Connection:
 		self.conn.sendall(bstring)
 
 	def read_bytes(self, mtu=1500):
-		received = self.conn.recv(mtu)
-		if len(received) == 0: raise ConnectionClosedException
-		else: return received
+		return self.conn.recv(mtu)
+

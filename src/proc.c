@@ -222,7 +222,7 @@ proc_startall(struct proc *parentproc, struct proc *frontendproc, struct proc *e
 	free(marshalledmsg);
 	ipcmsg_teardown(fdtransfermsg);
 
-	proc_poststartsetup("bundled parent");
+	proc_poststartsetup("workerd parent");
 }
 
 
@@ -259,12 +259,18 @@ proc_childstart(int parentfd, void (*launch)(void))
 			"setting up cross talk with other child");
 
 	proc_poststartsetup((p->mytype == PROC_FRONTEND) ?
-		"bundled frontend" :
-		"bundled engine");
+		"workerd frontend" :
+		"workerd engine");
 
 	launch();
 
 	/* exit after this point */
+}
+
+int
+myproc(void)
+{
+	return p->mytype;
 }
 
 void
@@ -358,7 +364,6 @@ proc_dorecv(int fd, short event, void *arg)
 
 		if (data == NULL) log_fatal("ipcmsg_unmarshal");
 
-		log_writex(LOGTYPE_DEBUG, "message (type %d) %d -> %d", imsg.hdr.type, source, p->mytype);
 		p->readcbs[source]((int)imsg.hdr.type, imsg.fd, data);
 
 		ipcmsg_teardown(data);

@@ -1,4 +1,4 @@
-/* bundled network rpc receipt system
+/* workerd network rpc receipt system
  * (c) jay lang 2023
  */
 

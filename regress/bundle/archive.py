@@ -133,7 +133,8 @@ class Archive:
 		completed = subprocess.run(["signify", "-V",
 				"-x", crcsig,
 				"-p", "/etc/signify/bundled.pub",
-				"-m", crcfile])
+				"-m", crcfile],
+				stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
 		os.unlink(crcfile)
 		os.unlink(crcsig)

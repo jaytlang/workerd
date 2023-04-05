@@ -20,10 +20,10 @@ KEY=		jaytlang.key
 SPUB=		bundled.pub
 
 CHROOT=		${DESTDIR}/var/workerd
-ARCHIVES=	${CHROOT}/archives
 DISKS=		${CHROOT}/disks
-MESSAGES=	${CHROOT}/messages
-SIGNATURES=	${CHROOT}/signatures
+FMESSAGES=	${CHROOT}/fmessages
+EMESSAGES=	${CHROOT}/emessages
+WRITEBACK=	${CHROOT}/writeback
 
 # base images live in /home, because /home
 # installs to a _much larger_ partition than /var
@@ -101,8 +101,8 @@ afterinstall:
 		-m ${USER} 2>/dev/null
 	${INSTALL} -o root -g wheel -m 755 -d /home/${USER}
 	${INSTALL} -o root -g daemon -m 755 -d ${CHROOT}
-	${INSTALL} -o root -g ${USER} -m 775 -d ${ARCHIVES} ${SIGNATURES} 	\
-		${DISKS} ${MESSAGES}
+	${INSTALL} -o root -g ${USER} -m 775 -d ${WRITEBACK}		 	\
+		${DISKS} ${FMESSAGES} ${EMESSAGES}
 	cd etc;									\
 	${INSTALL} -o root -g wheel -m 555 ${RCDAEMON} 				\
 		${DESTDIR}/etc/rc.d;						\
