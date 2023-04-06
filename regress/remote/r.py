@@ -1,12 +1,14 @@
+#!/usr/bin/env python3
+
 from bundleshim import *
 from conf import *
 from connection import *
 from message import *
 from timeout import *
 
+import signal
 import sys
 import threading
-import queue
 
 class ServerException(Exception): pass
 
@@ -22,8 +24,16 @@ try:
 except IndexError: usage()
 
 filelist = sys.argv[1:]
-tobuild = bundle(filelist)
 
+def cleanup(signo, frame):
+	clean_bundle()
+	print(f"caught signal {signal.Signals(signo).name}, exiting")
+	sys.exit(1)
+
+signal.signal(signal.SIGINT, cleanup)
+signal.signal(signal.SIGTERM, cleanup)
+
+tobuild = bundle(filelist)
 conn = Connection([server_ca, client_ca], client_cert, client_key)
 conn.connect(server_hostname, server_port)
 
@@ -31,7 +41,6 @@ with open(tobuild, 'rb') as f:
 	bundlecontent = f.read()
 
 opener = Message(MessageOp.SENDFILE, label=bytes(tobuild, encoding='ascii'), file=bundlecontent)
-# opener = Message(MessageOp.SENDFILE)
 conn.write_bytes(opener.to_bytes())
 
 conn_lock = threading.Lock()
@@ -39,7 +48,9 @@ line_semaphore = threading.Semaphore(0)
 
 def pollinput():
 	while True:
-		line = input()
+		try: line = input()
+		except EOFError: break
+
 		line_semaphore.acquire()
 
 		with conn_lock:
@@ -49,6 +60,8 @@ def pollinput():
 input_thread = threading.Thread(target=pollinput)
 input_thread.daemon = True
 input_thread.start()
+
+status = 0
 
 while True:
 	try: message = Message.from_conn(conn)
@@ -72,9 +85,9 @@ while True:
 	elif message.opcode() == MessageOp.ERROR:
 		print(f"ERROR: {message.label()}")
 		response = Message(MessageOp.TERMINATE)
+		status = 1
 
 	elif message.opcode() == MessageOp.HEARTBEAT:
-		print(".")
 		response = Message(MessageOp.HEARTBEAT)
 
 	else: raise ValueError(f"BUG: received bad opcode {message.opcode()}")
@@ -82,3 +95,6 @@ while True:
 	if response is not None:
 		with conn_lock:
 			conn.write_bytes(response.to_bytes())
+
+clean_bundle()
+sys.exit(status)

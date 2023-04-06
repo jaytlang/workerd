@@ -4,4 +4,4 @@
 set +x
 
 preload="scripts/mleakdetect/mleakdetect.so"
-doas env LD_PRELOAD=$preload bundled -dv 2> log.txt
+doas env LD_PRELOAD=$preload workerd -dv 2> log.txt

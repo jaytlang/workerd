@@ -542,6 +542,7 @@ vm_injectack(struct vm *v)
 	if (response == NULL)
 		log_fatal("vm_injectack: netmsg_new");
 
+	log_writex(LOGTYPE_DEBUG, "sending response");
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);
 }

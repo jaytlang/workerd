@@ -1,5 +1,5 @@
 PYTHON!=	which python3 || true
-RCDAEMON=	bundled
+RCDAEMON=	workerd
 FLAGS=		-v
 SUDO=		doas
 
@@ -7,6 +7,7 @@ REGRESS_SETUP_ONCE= daemon_start
 REGRESS_CLEANUP= daemon_stop
 
 TESTFILES!= ls t_*.py | sed -E 's/(.*)\.py/\1/'
+BUILDFILE= build.py
 
 .for TESTFILE in ${TESTFILES}
 ${TESTFILE}:
@@ -33,5 +34,6 @@ daemon_stop:
 	doas rcctl stop ${RCDAEMON}
 	doas rcctl disable ${RCDAEMON}
 	doas rm -rf __pycache__
+	doas rm -f ${BUILDFILE}
 
 .include <bsd.regress.mk>

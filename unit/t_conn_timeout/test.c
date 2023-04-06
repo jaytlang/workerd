@@ -22,6 +22,8 @@ static struct event	endtimer;
 
 int		debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void
 fork_client(void)
 {

@@ -16,6 +16,8 @@ static void	fork_client(void);
 static int	conn_counter = 0;
 int		debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void
 conn_accept(struct conn *c)
 {

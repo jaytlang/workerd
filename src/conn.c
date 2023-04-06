@@ -392,7 +392,8 @@ conn_dosend(struct msgqueue *mq, struct conn *c)
 		log_fatal("conn_dosend: netmsg_seek to cached offset");
 
 	rawmsg = reallocarray(NULL, sendsize, sizeof(char));
-	if (rawmsg == NULL) log_fatal("conn_dosend: reallocarray");
+	if (rawmsg == NULL)
+		log_fatal("conn_dosend: reallocarray can't allocate %ld bytes", sendsize);
 
 	if (netmsg_read(sendmsg, rawmsg, sendsize) != sendsize)
 		log_fatal("conn_dosend: netmsg_read failed to read %ld bytes", sendsize);

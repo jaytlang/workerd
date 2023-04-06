@@ -120,6 +120,7 @@ msgqueue_deletehead(struct msgqueue *mq)
 		free(first);
 	}
 
+	mq->cachedoffset = 0;
 	msgqueue_tryeventing(mq);
 }
 

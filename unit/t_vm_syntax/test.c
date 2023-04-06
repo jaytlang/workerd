@@ -31,6 +31,8 @@ static struct vm_interface vmi = { .print = print, .signaldone = ackdone, .repor
 
 int		debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void
 print(uint32_t key, char *msg)
 {

@@ -34,6 +34,8 @@ static int	key = 0;
 static int	printed = 0;
 int		debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void
 print(uint32_t key, char *msg)
 {

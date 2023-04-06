@@ -20,6 +20,8 @@ static struct event	endtimer;
 
 int		debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void 
 end_test(int fd, short event, void *arg)
 {

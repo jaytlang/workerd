@@ -22,6 +22,8 @@ static struct vm_interface vmi = { 0 };
 
 int	debug = 1, verbose = 1;
 
+int myproc() { return PROC_ENGINE; }
+
 static void
 killtest(int fd, short event, void *arg)
 {
