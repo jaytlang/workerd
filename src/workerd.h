@@ -20,7 +20,7 @@
 #define DISKS			CHROOT "/disks"
 
 #define MAXNAMESIZE		1024
-#define MAXFILESIZE		1048576
+#define MAXFILESIZE		10485760
 #define MAXSIGSIZE		177
 
 #define ERRSTRSIZE		2048
