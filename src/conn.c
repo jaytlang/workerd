@@ -21,7 +21,7 @@
 #include "workerd.h"
 
 #define CONN_LISTENBACKLOG	128
-#define CONN_MTU		1500
+#define CONN_MTU		1048576
 
 struct globalcontext {
 	int			 mode;

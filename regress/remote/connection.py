@@ -48,7 +48,7 @@ class Connection:
 	def write_bytes(self, bstring):
 		self.conn.sendall(bstring)
 
-	def read_bytes(self, mtu=1500):
+	def read_bytes(self, mtu=1048576):
 		received = self.conn.recv(mtu)
 		if len(received) == 0: raise ConnectionClosedException
 		else: return received
