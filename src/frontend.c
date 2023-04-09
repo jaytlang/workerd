@@ -210,7 +210,7 @@ activeconn_errortoclient(struct activeconn *ac, const char *fmt, ...)
 		log_fatalx("activeconn_errortoclient: netmsg_setlabel: %s", netmsg_error(response));
 
 	conn_send(ac->c, response);
-	log_writex(LOGTYPE_DEBUG, "sent error to cilent");
+	log_writex(LOGTYPE_DEBUG, "sent error '%s' to client", label);
 
 	free(label);
 	va_end(ap);

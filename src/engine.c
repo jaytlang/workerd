@@ -99,8 +99,6 @@ proc_getmsgfromfrontend(int type, int fd, struct ipcmsg *msg)
 	msgtext = ipcmsg_getmsg(msg);
 	key = ipcmsg_getkey(msg);
 
-	log_writex(LOGTYPE_DEBUG, "message type %d -> key %u", type, key);
-
 	if (type != IMSG_PUTARCHIVE)
 		if ((v = vm_fromkey(key)) == NULL)
 			log_fatal("proc_getmsgfromfrontend: vm_fromkey");

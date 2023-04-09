@@ -736,9 +736,18 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		log_fatal("netmsg_isvalid: seek for actual message size");
 
 	else if (actualmessagesize != calculatedmessagesize) {
+		/* XXX: debugging */
+		uint32_t stuff;
+
+		if (m->seekstorage(m->descriptor, (off_t)calculatedmessagesize, SEEK_SET) != calculatedmessagesize)
+			log_fatal("netmsg_isvalid: debugging instr: seekstorage");
+	
+		if (m->readstorage(m->descriptor, &stuff, sizeof(uint32_t)) != (ssize_t)sizeof(uint32_t))
+			log_fatal("netmsg_isvalid: debugging instr: readstorage");
+
 		snprintf(m->errstr, ERRSTRSIZE,
-			"claimed message size %ld != actual message size %ld",
-			calculatedmessagesize, actualmessagesize);
+			"claimed message size %ld != actual message size %ld. first extra word is %u",
+			calculatedmessagesize, actualmessagesize, stuff);
 
 		*fatal = 1;
 		goto end;

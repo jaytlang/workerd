@@ -340,15 +340,19 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 
 	if (m == NULL || strlen(netmsg_error(m)) > 0) {
 		if (v->state == VM_WORKSTATE)
-			vm_reporterror(v, "vm_getmsg: received bad message: %s",
-				(m == NULL) ? "unintelligble" : netmsg_error(m));
+			vm_reporterror(v, "vm_getmsg: received bad message from key %u: %s",
+				v->key, (m == NULL) ? "unintelligble" : netmsg_error(m));
 		return;
 	}
 
 	if (v->state != VM_WORKSTATE && netmsg_gettype(m) != NETOP_HEARTBEAT) {
-		log_writex(LOGTYPE_DEBUG, "WARNING: ignoring unsolicited message of type %u", netmsg_gettype(m));
+		log_writex(LOGTYPE_DEBUG, "vm_getmsg: ignoring unsolicited message of type %u from key %u",
+			netmsg_gettype(m), v->key);
 		return;
 	}
+
+	log_writex(LOGTYPE_DEBUG, "vm_getmsg: received message of type %u from key %u",
+		netmsg_gettype(m), v->key);
 
 	switch (netmsg_gettype(m)) {
 	case NETOP_SENDLINE:
@@ -513,6 +517,8 @@ vm_injectfile(struct vm *v, char *label, char *data, size_t datasize)
 	if (netmsg_setdata(response, data, datasize) < 0)
 		log_fatalx("vm_injectfile: netmsg_setdata: %s", netmsg_error(response));
 
+	log_writex(LOGTYPE_DEBUG, "vm_injectfile: sending NETOP_SENDFILE to key %u", v->key);
+
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);
 }
@@ -529,6 +535,8 @@ vm_injectline(struct vm *v, char *line)
 	if (netmsg_setlabel(response, line) < 0)
 		log_fatalx("vm_injectfile: netmsg_setlabel: %s", netmsg_error(response));
 
+	log_writex(LOGTYPE_DEBUG, "vm_injectline: sending NETOP_SENDLINE to key %u", v->key);
+
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);
 }
@@ -542,7 +550,8 @@ vm_injectack(struct vm *v)
 	if (response == NULL)
 		log_fatal("vm_injectack: netmsg_new");
 
-	log_writex(LOGTYPE_DEBUG, "sending response");
+	log_writex(LOGTYPE_DEBUG, "vm_injectack: sending NETOP_ACK to key %u", v->key);
+
 	conn_send(v->conn, response);
 	conn_receive(v->conn, vm_getmsg);
 }
