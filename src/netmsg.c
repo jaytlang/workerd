@@ -633,6 +633,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 	uint8_t		 actualtype;
 
 	ssize_t		 actualmessagesize, calculatedmessagesize;
+	off_t		 savedoffset;
 
 	/* usually, validity failures are not fatal, i.e.
 	 * more data can resolve the issue at hand
@@ -664,6 +665,9 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		*fatal = 1;
 		goto end;
 	}
+
+	if ((savedoffset = m->seekstorage(m->descriptor, 0, SEEK_CUR)) < 0)
+		log_fatal("netmsg_isvalid: seek to get current offset into message");
 
 	if (m->seekstorage(m->descriptor, 0, SEEK_SET) < 0)
 		log_fatal("netmsg_isvalid: failed to seek to start of message to check type");
@@ -755,5 +759,9 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 
 	status = 1;
 end:
+	if (*fatal == 0 || status == 1) {
+		if (m->seekstorage(m->descriptor, savedoffset, SEEK_SET) != savedoffset)
+			log_fatal("netmsg_isvalid: restore message offset prior to validation");
+	}
 	return status;
 }

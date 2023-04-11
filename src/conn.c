@@ -344,6 +344,17 @@ conn_doreceive(int fd, short event, void *arg)
 				/* deliver as is, caller checks for validity and
 				 * can discover errstr + work with it as desired
 				 */
+				char		*label, *data;
+				uint64_t	 datasize;
+
+				label = netmsg_getlabel(c->incoming_message);
+				data = netmsg_getdata(c->incoming_message, &datasize);
+
+				log_writex(LOGTYPE_DEBUG, "DEBUG: unrecoverable message was delivered. receivesize = %ld. label = %s. data size = %ld", receivesize, label, data);
+
+				free(label);
+				free(data);
+
 				c->cb_receive(c, c->incoming_message);
 
 				if (RB_FIND(conntree, &allcons, c) != NULL) {

@@ -399,6 +399,7 @@ vm_getmsg(struct conn *c, struct netmsg *m)
 		break;
 
 	case NETOP_HEARTBEAT:
+		vm_injectack(v);
 		break;
 
 	/* don't expect to receive acks from the VM */
