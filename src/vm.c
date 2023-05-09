@@ -419,6 +419,8 @@ vm_init(void)
 {
 	int	i;
 
+	VMCTL(1, "stop", "-fwa");
+
 	conn_listen(vm_accept, VM_CONN_PORT, CONN_MODE_TCP);
 	for (i = 0; i < VM_MAXCOUNT; i++) vm_reset(&allvms[i]);
 }
