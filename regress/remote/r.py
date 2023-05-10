@@ -34,7 +34,7 @@ signal.signal(signal.SIGINT, cleanup)
 signal.signal(signal.SIGTERM, cleanup)
 
 tobuild = bundle(filelist)
-conn = Connection([server_ca, client_ca], client_cert, client_key)
+conn = Connection([client_ca], client_cert, client_key)
 conn.connect(server_hostname, server_port)
 
 with open(tobuild, 'rb') as f:
