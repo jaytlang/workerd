@@ -29,6 +29,7 @@ daemon_start:
 	doas rcctl enable ${RCDAEMON}
 	doas rcctl set ${RCDAEMON} flags -v
 	doas rcctl start ${RCDAEMON}
+	sleep 20
 
 daemon_stop:
 	doas rcctl stop ${RCDAEMON}
