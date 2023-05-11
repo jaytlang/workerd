@@ -23,8 +23,8 @@ run: ${BUNDLE}
 	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS}
 
 ${BUNDLE}:
-	pyf=`ls *.py >>/dev/null 2>&1` &&				\
-	txtf=`ls *.txt >>/dev/null 2>&1 || true` &&			\
+	pyf=`ls *.py 2>>/dev/null` &&					\
+	txtf=`ls *.txt 2>>/dev/null || true` &&				\
 	python3 ../bundle/bundle.py -csvf $@ $$pyf $$txtf || touch $@
 
 clean:
