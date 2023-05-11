@@ -25,7 +25,7 @@ run: ${BUNDLE}
 	echo "SKIPPED"
 
 ${BUNDLE}:
-	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ *.py
+	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ *.py *.txt
 
 clean:
 	rm -f a.out [Ee]rrs mklog *.core y.tab.h a.out *.[od] ${PROG} ${BUNDLE}
