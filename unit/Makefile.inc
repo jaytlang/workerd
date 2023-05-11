@@ -20,13 +20,12 @@ ${PROG}: ${LIBCRT0} ${OBJS} ${LIBC} ${CRTBEGIN} ${CRTEND} ${DPADD}
 
 .PHONY: run clean
 run: ${BUNDLE}
-	ls *.py >>/dev/null 2>&1 && {			\
-	[ -n "${BUNDLE}" ] && 				\
-	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS} ||	\
-	echo "SKIPPED" } || touch $@
+	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS}
 
 ${BUNDLE}:
-	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ `ls *.py *.txt 2>/dev/null`
+	pyf=`ls *.py >>/dev/null 2>&1` &&				\
+	txtf=`ls *.txt >>/dev/null 2>&1 || true` &&			\
+	python3 ../bundle/bundle.py -csvf $@ $$pyf $$txtf || touch $@
 
 clean:
 	rm -f a.out [Ee]rrs mklog *.core y.tab.h a.out *.[od] ${PROG} ${BUNDLE}
