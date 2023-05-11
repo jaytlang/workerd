@@ -20,9 +20,10 @@ ${PROG}: ${LIBCRT0} ${OBJS} ${LIBC} ${CRTBEGIN} ${CRTEND} ${DPADD}
 
 .PHONY: run clean
 run: ${BUNDLE}
+	ls *.py >>/dev/null 2>&1 && {			\
 	[ -n "${BUNDLE}" ] && 				\
 	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS} ||	\
-	echo "SKIPPED"
+	echo "SKIPPED" } || touch $@
 
 ${BUNDLE}:
 	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ *.py *.txt
