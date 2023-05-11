@@ -26,7 +26,7 @@ run: ${BUNDLE}
 	echo "SKIPPED" } || touch $@
 
 ${BUNDLE}:
-	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ *.py *.txt
+	[ -n "${PYTHON}" ] && python3 ../bundle/bundle.py -csvf $@ `ls *.py *.txt 2>/dev/null`
 
 clean:
 	rm -f a.out [Ee]rrs mklog *.core y.tab.h a.out *.[od] ${PROG} ${BUNDLE}
