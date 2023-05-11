@@ -1,10 +1,12 @@
 PROG=	test
+BUNDLE=	build.bundle
 NOMAN=	noman
 SUDO=	doas
 
 TESTUSER?=	_workerd
 SRCDIR?=	../../src
 RUNFLAGS?=
+PYTHON!=	which python3 || true
 
 COPTS+= -O0 -Wall -Wextra -Werror -pedantic -I${SRCDIR}
 COPTS+= -Wno-unused-function -Wno-unneeded-internal-declaration
@@ -17,8 +19,13 @@ ${PROG}: ${LIBCRT0} ${OBJS} ${LIBC} ${CRTBEGIN} ${CRTEND} ${DPADD}
 	${CC} ${LDFLAGS} ${LDSTATIC} -o ${.TARGET} ${OBJS:S/..\/..\/src\///g} ${LDADD}
 
 .PHONY: run clean
-run:
-	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS}
+run: ${BUNDLE}
+	[ -n "${BUNDLE}" ] && 				\
+	${SUDO} -u ${TESTUSER} ./${PROG} ${RUNFLAGS} ||	\
+	echo "SKIPPED"
+
+${BUNDLE}:
+	[ -n "${PYTHON}" ] && python3 bundle/bundle.py -csvf $@ *.py
 
 clean:
-	rm -f a.out [Ee]rrs mklog *.core y.tab.h a.out *.[od] ${PROG}
+	rm -f a.out [Ee]rrs mklog *.core y.tab.h a.out *.[od] ${PROG} ${BUNDLE}
