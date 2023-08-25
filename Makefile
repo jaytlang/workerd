@@ -13,10 +13,6 @@ RCDAEMON=	workerd
 USER=		_workerd
 GECOS=		"Student Job Scheduler Daemon"
 
-CA=		mitcca.pem
-CERT=		jaytlang.pem
-KEY=		jaytlang.key
-
 SPUB=		bundled.pub
 
 CHROOT=		${DESTDIR}/var/workerd
@@ -36,12 +32,10 @@ CONFIG=		workerd.conf
 VMCONFIG=	vm.conf
 
 SERVERSEC=	/etc/ssl/private/server.key
-SERVERCA=	/etc/ssl/authority/serverchain.pem
+SERVERCA=	/etc/ssl/cert.pem
 SERVERPUB=	/etc/ssl/server.pem
 
 # Build configuration ends here
-
-REHASH=		scripts/rehash.sh
 UGOUID=		's/.*\(....\)/\1/'
 
 checkcerts:
@@ -106,9 +100,6 @@ afterinstall:
 	cd etc;									\
 	${INSTALL} -o root -g wheel -m 555 ${RCDAEMON} 				\
 		${DESTDIR}/etc/rc.d;						\
-	${INSTALL} -o root -g wheel -m 444 ${CA} ${DESTDIR}/etc/ssl/authority;	\
-	${INSTALL} -o root -g wheel -m 444 ${CERT} ${DESTDIR}/etc/ssl;		\
-	${INSTALL} -o root -g wheel -m 400 ${KEY} ${DESTDIR}/etc/ssl/private;	\
 	${INSTALL} -o root -g ${USER} -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g wheel -m 644 ${VMCONFIG} ${DESTDIR}/etc;		\
 	${INSTALL} -o root -g wheel -m 644 ${CONFIG} ${DESTDIR}/etc
@@ -125,7 +116,6 @@ afterinstall:
 	${INSTALL} -o root -g wheel -m 444 ${BASEVIVADO} ${DESTDIR}/home/${USER}
 .endif
 	rcctl stop vmd && rcctl start vmd
-	sh scripts/rehash.sh /etc/ssl/authority
 
 .PHONY: uninstall reinstall
 uninstall: checkroot

@@ -94,9 +94,9 @@ globalcontext_init(int mode)
 		if (globalcfg == NULL)
 			log_fatalx("globalcontext_init: can't allocate tls globalcfg");
 	
-		if (tls_config_set_ca_path(globalcfg, CONN_CA_PATH) < 0) {
+		if (tls_config_set_ca_file(globalcfg, CONN_CA_PATH) < 0) {
 			tls_config_free(globalcfg);
-			log_fatalx("globalcontext_init: can't set ca path to %s", CONN_CA_PATH);
+			log_fatalx("globalcontext_init: can't set ca file to %s", CONN_CA_PATH);
 		}
 	
 		if (tls_config_set_cert_file(globalcfg, CONN_CERT) < 0) {
@@ -114,8 +114,6 @@ globalcontext_init(int mode)
 			tls_config_free(globalcfg);
 			log_fatalx("globalcontext_init: can't set key memory");
 		}
-
-		tls_config_verify_client(globalcfg);
 
 		serverctx = tls_server();
 		if (serverctx == NULL)
