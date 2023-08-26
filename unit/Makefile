@@ -8,7 +8,7 @@ build_all: image_clean
 	make -C ${TESTDIR}
 .endfor
 
-clean_all: image_clean
+clean_all: clean image_clean
 .for TESTDIR in ${TESTDIRS}
 	make -C ${TESTDIR} clean
 .endfor
