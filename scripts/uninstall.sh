@@ -21,9 +21,6 @@ doas rm -rf /home/_workerd
 doas rm -rf /var/workerd
 doas rm -f /usr/sbin/workerd
 
-doas rm -f /etc/ssl/authority/mitcca.pem
-doas rm -f /etc/ssl/jaytlang.pem
-doas rm -f /etc/ssl/private/jaytlang.key
 doas rm -f /etc/signify/bundled.pub
 doas rm -f /etc/workerd.conf
 
@@ -31,5 +28,3 @@ doas rm -f /etc/vm.conf
 doas vmctl stop -fwa
 doas rcctl stop vmd
 doas rcctl start vmd
-
-doas sh scripts/rehash.sh /etc/ssl/authority
