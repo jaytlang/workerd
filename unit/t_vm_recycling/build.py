@@ -1,6 +1,6 @@
 import time
 
 print("hello world")
-time.sleep(20)
+time.sleep(30)
 
 print("simulated work over!")

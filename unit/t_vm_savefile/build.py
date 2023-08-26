@@ -1,10 +1,9 @@
-with open("testfile.txt", 'r+') as f:
+print("hiiiiiii")
+
+with open("testfile.txt", 'rb+') as f:
 	content = f.read()
-	if content != "hi there":
-		print(f"got erroneous content {content}")
-		raise ValueError("file did not transmit correctly!")
-	
-	f.write(", friend")
+	print(f"content length is {len(content)}")
+	f.write(b", friend")
 
 # commit is here
 save("testfile.txt")

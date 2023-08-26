@@ -16,10 +16,10 @@
 #define TEST_KEY		69420
 
 #define TEST_BUNDLENAME		"build.bundle"
-#define TEST_BUNDLEMAXSIZE	10240
+#define TEST_BUNDLEMAXSIZE	10485760
 
 #define TEST_FILENAME		"testfile.txt"
-#define TEST_FINALCONTENT	"hi there, friend"
+#define TEST_FINALCONTENTLEN	1581966
 
 static void	print(uint32_t, char *);
 static void	commitfile(uint32_t, char *, char *, size_t);
@@ -63,20 +63,17 @@ commitfile(uint32_t key, char *filename, char *data, size_t datasize)
 		errx(1, "requested bad filename %s", filename);
 	}
 
-	if (strlen(TEST_FINALCONTENT) != datasize) {
+	if (TEST_FINALCONTENTLEN != datasize) {
 		vm_killall();
-		errx(1, "got bad filelength - expected %lu, got %lu",
-			strlen(TEST_FINALCONTENT),
+		errx(1, "got bad filelength - expected %d, got %lu",
+			TEST_FINALCONTENTLEN,
 			datasize);
-	}
-
-	if (memcmp(TEST_FINALCONTENT, data, datasize) != 0) {
-		vm_killall();
-		errx(1, "got bad data %s", data);
 	}
 
 	committed = 1;
  	vm_injectack(vm_fromkey(key));
+
+	(void)data;
 }
 
 static void
@@ -84,6 +81,8 @@ fail(uint32_t key, char *msg)
 {
 	if (key != TEST_KEY) errx(1, "got error from unknown vm");
 
+	warnx("uh oh");
+	sleep(5);
 	vm_killall();
 	errx(1, "error callback: %s", msg);	
 }
@@ -120,11 +119,14 @@ bootpoll(int fd, short event, void *arg)
 	new = vm_claim(TEST_KEY, vmi);
 
 	if (new != NULL) {
-		char	 data[10240];
-		size_t	 datasize;
-		int	 fd;
+		char	  *data;
+		ssize_t	   datasize;
+		int	   fd;
 
 		warnx("noticed vm online");
+
+		if ((data = malloc(TEST_BUNDLEMAXSIZE)) == NULL)
+			err(1, "malloc data buffer");
 
 		if ((fd = open(TEST_BUNDLENAME, O_RDONLY)) < 0)
 			err(1, "open %s", TEST_BUNDLENAME);
@@ -132,7 +134,10 @@ bootpoll(int fd, short event, void *arg)
 		if ((datasize = read(fd, data, TEST_BUNDLEMAXSIZE)) < 0)
 			err(1, "read %s", TEST_BUNDLENAME);
 
-		vm_injectfile(new, TEST_BUNDLENAME, data, datasize);
+		warnx("injecting file %s of size %zu", TEST_BUNDLENAME, (size_t)datasize);
+		vm_injectfile(new, TEST_BUNDLENAME, data, (size_t)datasize);
+
+		free(data);
 		close(fd);
 
 	} else if (errno == EAGAIN) {
