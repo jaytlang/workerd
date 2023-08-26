@@ -142,7 +142,7 @@ int              netmsg_isvalid(struct netmsg *, int *);
 #define VM_CONN_PORT		8123
 #define VM_TIMEOUT		1
 
-#define CONN_CA_PATH    "/etc/ssl/authority"
+#define CONN_CA_PATH    "/etc/ssl/cert.pem"
 #define CONN_CERT       "/etc/ssl/server.pem"
 #define CONN_KEY        "/etc/ssl/private/server.key"
 
