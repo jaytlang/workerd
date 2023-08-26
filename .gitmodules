@@ -2,3 +2,7 @@
 	path = unit/bundle
 	url = https://github.com/jaytlang/bundle
 	branch = master
+[submodule "regress/remote"]
+	path = regress/remote
+	url = https://github.com/jaytlang/remote
+	branch = master
