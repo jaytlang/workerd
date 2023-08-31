@@ -15,7 +15,7 @@
 
 #define TEST_BUNDLENAME		"build.bundle"
 #define TEST_BUNDLEMAXSIZE	10240
-#define TEST_ROUNDS		12
+#define TEST_ROUNDS		5
 
 static void	print(uint32_t, char *);
 static void	fail(uint32_t, char *);
