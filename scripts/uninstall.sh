@@ -12,7 +12,7 @@ doas rm -f /etc/rc.d/workerd
 # speed hack to support FAST=1
 if [ -f /home/_workerd/base.qcow2 ]; then
 	mv /home/_workerd/*.qcow2 images
-	chown jaytlang:jaytlang images/*
+	chown $USER:$USER images/*
 	chmod 644 images/*
 fi
 
